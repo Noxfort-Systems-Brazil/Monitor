@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="icon" href="/static/img/logo.png" type="image/png">
+
+    <title>Noxfort Monitor™</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <link href="/static/css/style.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="/static/img/logo.png" alt="Noxfort Logo" height="30" class="me-2">
+                <span class="fw-bold text-uppercase" data-i18n="meta_app_name">Noxfort Monitor™</span>
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fa-solid fa-chart-line me-1"></i> 
+                            <span data-i18n="sidebar_dashboard">Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/devices">
+                            <i class="fa-solid fa-server me-1"></i> 
+                            <span data-i18n="sidebar_devices">Devices</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/contacts">
+                            <i class="fa-solid fa-users-gear me-1"></i> 
+                            <span data-i18n="sidebar_contacts">Response Team</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings">
+                            <i class="fa-solid fa-sliders me-1"></i> 
+                            <span data-i18n="sidebar_settings">Settings</span>
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item dropdown ms-lg-3 mt-2 mt-lg-0 border-start border-secondary ps-lg-3">
+                        <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fa-solid fa-globe me-1"></i> <span id="current-lang-label">EN</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow" aria-labelledby="langDropdown">
+                            <li><button class="dropdown-item lang-btn" type="button" data-lang="en">English (US)</button></li>
+                            <li><button class="dropdown-item lang-btn" type="button" data-lang="pt">Português (BR)</button></li>
+                            <li><hr class="dropdown-divider border-secondary"></li>
+                            <li><button class="dropdown-item lang-btn" type="button" data-lang="es">Español</button></li>
+                            <li><button class="dropdown-item lang-btn" type="button" data-lang="fr">Français</button></li>
+                            <li><button class="dropdown-item lang-btn" type="button" data-lang="ru">Русский</button></li>
+                            <li><button class="dropdown-item lang-btn" type="button" data-lang="zh">中文 (Mandarin)</button></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {{ template "content" . }}
+    </div>
+
+    <footer class="text-center text-muted py-4 mt-5 border-top">
+        <div class="container d-flex justify-content-center align-items-center">
+            <img src="/static/img/logo.png" alt="Noxfort Logo" height="36" class="me-3" style="opacity: 0.8;">
+            
+            <div class="text-start">
+                <p class="mb-0 small fw-bold" data-i18n="meta_footer">Noxfort Monitor™ · Industrial Orchestration System</p>
+                <p class="mb-0 small" style="font-size: 0.75rem;" data-i18n="footer_license">Licensed under GNU AGPLv3.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/i18n.js"></script>
+</body>
+</html>

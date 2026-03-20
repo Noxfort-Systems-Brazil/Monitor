@@ -1,0 +1,35 @@
+# Noxfort Monitor™ is an open-source industrial telemetry, observability, and incident response orchestration system.
+# Copyright (C) 2026 Gabriel Moraes - Noxfort Systems
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# File: docker-compose.yml
+# Author: Gabriel Moraes
+# Date: 2026-01-16
+
+version: '3.8'
+
+services:
+  # MQTT Broker (The Central Nervous System)
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: noxfort-broker
+    ports:
+      - "1883:1883" # Standard MQTT Port
+      - "9001:9001" # Websocket Port (for future web clients)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped

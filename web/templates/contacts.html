@@ -1,0 +1,138 @@
+{{ define "content" }}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom border-secondary">
+    <h1 class="h2 text-white"><i class="fa-solid fa-users-gear me-2"></i><span data-i18n="contact_title">Response Team</span></h1>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card bg-dark border-secondary text-white shadow-sm">
+            <div class="card-header border-secondary">
+                <i class="fa-solid fa-user-plus me-2"></i> <span data-i18n="contact_add_btn">Add Team Member</span>
+            </div>
+            <div class="card-body">
+                <form action="/contacts/create" method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label" data-i18n="contact_col_name">Full Name</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" id="name" name="name" required data-i18n-placeholder="contact_name_placeholder" placeholder="Ex: John Doe">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="role" class="form-label" data-i18n="contact_col_role">Role / Position</label>
+                        <select class="form-select bg-black text-white border-secondary" id="role" name="role">
+                            <option value="System Admin"  data-i18n="contact_role_admin">System Admin</option>
+                            <option value="Technician"   data-i18n="contact_role_technician">Technician</option>
+                            <option value="Programmer"   data-i18n="contact_role_programmer">Programmer</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label" data-i18n="contact_col_email">Email Address</label>
+                        <input type="email" class="form-control bg-black text-white border-secondary" id="email" name="email" required placeholder="email@noxfort.com">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="phone" class="form-label" data-i18n="contact_col_phone">Phone (Optional)</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" id="phone" name="phone" placeholder="+55 ...">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="telegram_chat_id" class="form-label">
+                            <i class="fa-brands fa-telegram text-info me-1"></i> Telegram Chat ID <span class="text-muted small">(<span data-i18n="contact_col_phone">Optional</span>)</span>
+                        </label>
+                        <input type="text" class="form-control bg-black text-white border-secondary"
+                               id="telegram_chat_id" name="telegram_chat_id"
+                               placeholder="Ex: 123456789">
+                        <div class="form-text text-muted small">
+                            <span data-i18n="contact_telegram_hint_pre">Get your ID by messaging</span>
+                            <a href="https://t.me/userinfobot" target="_blank" class="text-info">@userinfobot</a>
+                            <span data-i18n="contact_telegram_hint_post">on Telegram.</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-info w-100">
+                        <i class="fa-solid fa-plus me-2"></i> <span data-i18n="contact_register_btn">Register Contact</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card bg-dark border-secondary shadow-sm">
+            <div class="card-header border-secondary text-white d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-address-book me-2"></i> <span data-i18n="contact_directory">Directory</span></span>
+                <span class="badge bg-secondary">{{ len .Contacts }} <span data-i18n="contact_members">Members</span></span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle">
+                        <thead>
+                            <tr class="text-muted">
+                                <th class="ps-4" data-i18n="contact_col_name">Name / Role</th>
+                                <th data-i18n="contact_col_email">Contact Info</th>
+                                <th class="text-center"><i class="fa-brands fa-telegram text-info me-1"></i><span data-i18n="contact_col_telegram">Telegram</span></th>
+                                <th class="text-center" data-i18n="contact_col_notify">Alerts</th>
+                                <th class="text-end pe-4" data-i18n="dev_col_actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .Contacts }}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-white">{{ .Name }}</div>
+                                    <small class="text-info" data-role="{{ .Role }}">{{ .Role }}</small>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center mb-1">
+                                        <i class="fa-solid fa-envelope text-muted me-2" style="width: 16px;"></i>
+                                        <span>{{ .Email }}</span>
+                                    </div>
+                                    {{ if .Phone }}
+                                    <div class="d-flex align-items-center">
+                                        <i class="fa-solid fa-phone text-muted me-2" style="width: 16px;"></i>
+                                        <small>{{ .Phone }}</small>
+                                    </div>
+                                    {{ end }}
+                                </td>
+                                <td class="text-center">
+                                    {{ if .TelegramChatID }}
+                                        <span class="badge bg-info bg-opacity-15 text-info border border-info" title="Chat ID: {{ .TelegramChatID }}">
+                                            <i class="fa-brands fa-telegram me-1"></i>{{ .TelegramChatID }}
+                                        </span>
+                                    {{ else }}
+                                        <span class="text-muted small">—</span>
+                                    {{ end }}
+                                </td>
+                                <td class="text-center">
+                                    {{ if .NotifyCritical }}
+                                        <span class="badge bg-danger bg-opacity-25 text-danger border border-danger" data-i18n="contact_alert_critical_only">CRITICAL ONLY</span>
+                                    {{ else }}
+                                        <span class="badge bg-success bg-opacity-25 text-success border border-success" data-i18n="contact_alert_warning_critical">WARNING &amp; CRITICAL</span>
+                                    {{ end }}
+                                </td>
+                                <td class="text-end pe-4">
+                                    <form action="/contacts/delete" method="POST" class="d-inline">
+                                        <input type="hidden" name="id" value="{{ .ID }}">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(window._t('contact_confirm_remove') || 'Remove?');">
+                                            <i class="fa-solid fa-trash"></i> <span data-i18n="common_btn_delete">Delete</span>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {{ else }}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted" data-i18n="contact_empty">
+                                    <i class="fa-solid fa-user-slash fa-2x mb-3 opacity-50"></i><br>
+                                    No contacts registered.<br>
+                                    Add a team member to receive system alerts.
+                                </td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}

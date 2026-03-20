@@ -1,0 +1,232 @@
+/*
+Noxfort Monitor™ is an open-source industrial telemetry, observability, and incident response orchestration system.
+Copyright (C) 2026 Gabriel Moraes - Noxfort Systems
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+File: web/static/css/style.css
+Author: Gabriel Moraes
+Date: 2026-01-19
+*/
+
+/* 1. CORE DARK MODE SETTINGS */
+body {
+    background-color: #050505;
+    /* Deepest Black */
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 2. NAVBAR & BRANDING */
+.navbar {
+    background-color: #000000 !important;
+    /* Gradient Border: Red -> Orange -> Yellow (Noxfort Identity) */
+    border-bottom: 3px solid;
+    border-image: linear-gradient(90deg, #d32f2f, #f57c00, #fbc02d) 1;
+    box-shadow: 0 4px 15px rgba(211, 47, 47, 0.2);
+    /* Red glow underneath */
+}
+
+.navbar-brand {
+    font-size: 1.4rem;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    /* Fire Glow Effect */
+    text-shadow: 0 0 10px rgba(245, 124, 0, 0.6);
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: #9e9e9e;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+    color: #ffffff;
+    text-shadow: 0 0 5px rgba(255, 160, 0, 0.5);
+    /* Yellowish glow on hover */
+}
+
+.navbar-dark .navbar-nav .nav-link.active {
+    color: #ff9800;
+    /* Noxfort Orange for active page */
+    font-weight: 700;
+}
+
+/* 3. DARK CARDS & SURFACES - DARKENED */
+.card {
+    background-color: #121212;
+    /* Much darker than before */
+    border: 1px solid #333;
+    border-radius: 4px;
+    /* Industrial corners */
+}
+
+.card-header {
+    background-color: #1a1a1a;
+    border-bottom: 2px solid #b71c1c;
+    /* Dark Red accent line */
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* 4. BUTTONS & INTERACTIVE ELEMENTS (Brand Colors) */
+
+/* Primary Button: Gradient Red/Orange */
+.btn-primary {
+    background: linear-gradient(135deg, #d32f2f 0%, #f57c00 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #b71c1c 0%, #e65100 100%);
+    box-shadow: 0 0 10px rgba(245, 124, 0, 0.4);
+}
+
+/* Outline Button */
+.btn-outline-primary {
+    color: #ff9800;
+    border-color: #ff9800;
+}
+
+.btn-outline-primary:hover {
+    background-color: #ff9800;
+    color: #000;
+    border-color: #ff9800;
+}
+
+/* 5. TABLES */
+.table {
+    color: #e0e0e0;
+    border-color: #333;
+    --bs-table-bg: transparent;
+    /* Fix Bootstrap override */
+}
+
+.table th {
+    background-color: #1a1a1a;
+    /* Darker header */
+    color: #ffb74d;
+    /* Light Orange text for headers */
+    border-bottom: 1px solid #d32f2f;
+    /* Red separator */
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+}
+
+.table td {
+    border-color: #2a2a2a;
+    background-color: #121212;
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover td {
+    background-color: #1e1e1e;
+    /* Subtle highlight */
+    color: #ffffff;
+}
+
+/* 6. INPUTS & FORMS */
+.form-control,
+.form-select {
+    background-color: #1e1e1e;
+    /* Darker input bg */
+    border: 1px solid #444;
+    color: #fff;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: #252525;
+    color: #fff;
+    border-color: #f57c00;
+    /* Orange focus border */
+    box-shadow: 0 0 0 0.25rem rgba(245, 124, 0, 0.25);
+    /* Orange focus glow */
+}
+
+/* 7. UTILITIES & ICONS */
+.text-muted {
+    color: #757575 !important;
+}
+
+/* Fix Bootstrap bg-light to match theme */
+.bg-light {
+    background-color: #121212 !important;
+}
+
+.border-top {
+    border-top: 1px solid #333 !important;
+}
+
+/* Technical Font - Yellow/Orange for high visibility */
+.font-monospace {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    color: #ffd54f;
+    /* Soft Yellow */
+    background-color: #212121;
+    border: 1px solid #424242;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Modal */
+.modal-content {
+    background-color: #121212;
+    border: 1px solid #333;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+.modal-header {
+    border-bottom: 1px solid #333;
+}
+
+.modal-footer {
+    border-top: 1px solid #333;
+}
+
+.btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Footer */
+footer {
+    background-color: #000000;
+    color: #666;
+    border-top: 1px solid #1a1a1a !important;
+}
+
+/* Custom Scrollbar for Webkit */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #000;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #d32f2f;
+    /* Red on hover */
+}

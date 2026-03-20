@@ -1,0 +1,12 @@
+# Binários e Executáveis
+/bin/
+*.exe
+noxfort-monitor
+
+# Dados e Logs do Mosquitto
+mosquitto/data/*
+!mosquitto/data/.gitkeep
+mosquitto/log/*
+!mosquitto/log/.gitkeep
+*.db
+*.log

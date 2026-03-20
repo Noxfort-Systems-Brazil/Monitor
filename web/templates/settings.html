@@ -1,0 +1,289 @@
+{{ define "content" }}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom border-secondary">
+    <h1 class="h2 text-warning"><i class="fa-solid fa-gears me-2"></i><span data-i18n="settings_title">System Settings</span></h1>
+</div>
+
+<div class="row justify-content-center">
+
+    <div class="col-md-7 col-lg-6">
+
+    {{/* ─── SMTP / Email Card ─── */}}
+        <div id="feedback-alert-smtp" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+        {{ if .Settings.SMTPUser }}
+        <div id="connected-card" class="card bg-dark border-success shadow-lg text-center fade-in">
+            <div class="card-body p-5">
+                <div class="mb-4 position-relative d-inline-block">
+                    <div class="rounded-circle bg-success bg-opacity-10 p-4 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px; margin: 0 auto;">
+                        <i class="fa-solid fa-user-shield fa-3x text-success"></i>
+                    </div>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success border border-dark" data-i18n="common_active">Active</span>
+                </div>
+                <h3 class="text-white mb-1" data-i18n="settings_smtp_authenticated">System Authenticated</h3>
+                <p class="text-muted mb-4" data-i18n="settings_smtp_authenticated_sub">Alerts are being sent via this identity.</p>
+                <div class="bg-black bg-opacity-50 rounded p-3 mb-4 border border-secondary d-inline-block w-100">
+                    <div class="text-uppercase text-muted small fw-bold mb-1" data-i18n="settings_smtp_current_sender">Current Sender</div>
+                    <div class="fs-5 text-info font-monospace text-break">{{ .Settings.SMTPUser }}</div>
+                    <div class="mt-2 small text-muted">
+                        <i class="fa-solid fa-server me-1"></i>
+                        {{ if eq .Settings.SMTPHost "smtp.gmail.com" }}<span data-i18n="settings_smtp_provider_google">Google Workspace</span>
+                        {{ else if eq .Settings.SMTPHost "smtp.office365.com" }}<span data-i18n="settings_smtp_provider_outlook">Microsoft Outlook</span>
+                        {{ else }}<span data-i18n="settings_smtp_provider_custom">Custom SMTP Server</span>
+                        {{ end }}
+                    </div>
+                </div>
+                <div class="d-grid gap-2">
+                    <button type="button" id="btn-test-existing" class="btn btn-outline-light">
+                        <i class="fa-solid fa-paper-plane me-2"></i> <span data-i18n="settings_btn_test">Send Test Alert</span>
+                    </button>
+                    <button type="button" id="btn-change-account" class="btn btn-outline-secondary btn-sm mt-2">
+                        <i class="fa-solid fa-right-from-bracket me-2"></i> <span data-i18n="settings_smtp_disconnect">Disconnect / Change Account</span>
+                    </button>
+                </div>
+            </div>
+            <div class="card-footer bg-success bg-opacity-10 border-success text-success small">
+                <i class="fa-solid fa-shield-halved me-2"></i> <span data-i18n="settings_smtp_secure">Secure Connection Established</span>
+            </div>
+        </div>
+        {{ end }}
+
+        <div id="setup-card" class="{{ if .Settings.SMTPUser }}d-none{{ end }}">
+            <div class="card bg-dark border-secondary text-light shadow-lg">
+                <div class="card-header border-secondary bg-black bg-opacity-25 text-center py-3">
+                    <h5 class="mb-0"><i class="fa-solid fa-envelope me-2"></i><span data-i18n="settings_smtp_header">SMTP Configuration (Email)</span></h5>
+                </div>
+                <div class="card-body p-4">
+                    <form action="/settings/save" method="POST" id="settingsForm">
+                        <input type="hidden" name="mqtt_address" value="{{ .Settings.MqttAddress }}">
+                        <input type="hidden" name="enabled" value="on">
+                        <input type="hidden" name="telegram_bot_token" value="{{ .Settings.TelegramBotToken }}">
+
+                        <p class="text-center text-muted small mb-3" data-i18n="settings_smtp_connect_provider">Select your email provider to sign in</p>
+                        <div class="row g-2 mb-4">
+                            <div class="col-4">
+                                <input type="radio" class="btn-check" name="provider_select" id="prov_gmail" value="gmail" autocomplete="off">
+                                <label class="btn btn-outline-light w-100 py-3 border-secondary opacity-75" for="prov_gmail">
+                                    <i class="fa-brands fa-google fs-4 mb-1 text-danger"></i><br><small>Gmail</small>
+                                </label>
+                            </div>
+                            <div class="col-4">
+                                <input type="radio" class="btn-check" name="provider_select" id="prov_outlook" value="outlook" autocomplete="off">
+                                <label class="btn btn-outline-light w-100 py-3 border-secondary opacity-75" for="prov_outlook">
+                                    <i class="fa-brands fa-microsoft fs-4 mb-1 text-primary"></i><br><small>Outlook</small>
+                                </label>
+                            </div>
+                            <div class="col-4">
+                                <input type="radio" class="btn-check" name="provider_select" id="prov_custom" value="custom" autocomplete="off">
+                                <label class="btn btn-outline-light w-100 py-3 border-secondary opacity-75" for="prov_custom">
+                                    <i class="fa-solid fa-server fs-4 mb-1 text-warning"></i><br><small>Other</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="guide_panel" class="alert alert-info bg-dark border-info d-none mb-4">
+                            <div class="d-flex">
+                                <i class="fa-solid fa-key fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <strong class="d-block mb-1" data-i18n="settings_smtp_app_password">App Password Required</strong>
+                                    <span class="small opacity-75" id="guide_text">...</span>
+                                    <div class="mt-2">
+                                        <a href="#" target="_blank" id="guide_link" class="btn btn-sm btn-info text-dark fw-bold">
+                                            Generate Password <i class="fa-solid fa-external-link-alt ms-1"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="email" class="form-control bg-black text-white border-secondary"
+                                   id="smtp_user" name="smtp_user" placeholder="Email"
+                                   value="{{ .Settings.SMTPUser }}" required>
+                            <label for="smtp_user" class="text-muted" data-i18n="settings_smtp_email_label">Email Address</label>
+                        </div>
+                        <div class="form-floating mb-4">
+                            <input type="password" class="form-control bg-black text-white border-secondary"
+                                   id="smtp_pass" name="smtp_pass" placeholder="App Password"
+                                   value="{{ .Settings.SMTPPass }}">
+                            <label for="smtp_pass" class="text-muted" id="pass_label" data-i18n="settings_smtp_pass_label">Password</label>
+                        </div>
+
+                        <div id="technical_section" class="d-none mb-3">
+                            <div class="row g-2">
+                                <div class="col-8">
+                                    <input type="text" class="form-control form-control-sm bg-dark text-muted border-secondary" id="smtp_host" name="smtp_host" value="{{ .Settings.SMTPHost }}" placeholder="SMTP Host">
+                                </div>
+                                <div class="col-4">
+                                    <input type="text" class="form-control form-control-sm bg-dark text-muted border-secondary" id="smtp_port" name="smtp_port" value="{{ .Settings.SMTPPort }}" placeholder="Port">
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <input type="text" class="form-control form-control-sm bg-dark text-muted border-secondary" id="smtp_from" name="smtp_from" value="{{ .Settings.SMTPFrom }}" placeholder="Sender Name (Optional)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success py-2">
+                                <i class="fa-solid fa-link me-2"></i> <span data-i18n="settings_btn_save">Connect Account</span>
+                            </button>
+                            {{ if .Settings.SMTPUser }}
+                            <button type="button" id="btn-cancel-edit" class="btn btn-link text-muted mt-2 text-decoration-none small">
+                                <span data-i18n="settings_smtp_cancel">Cancel</span>
+                            </button>
+                            {{ end }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    {{/* ─── Telegram Bot Card ─── */}}
+    <div class="mt-4">
+        <div id="feedback-alert-telegram" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+        {{ if .Settings.TelegramBotToken }}
+        <div id="telegram-connected-card" class="card bg-dark border-info shadow-lg text-center fade-in">
+            <div class="card-body p-5">
+                <div class="mb-4 position-relative d-inline-block">
+                    <div class="rounded-circle bg-info bg-opacity-10 p-4 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px; margin: 0 auto;">
+                        <i class="fa-brands fa-telegram fa-3x text-info"></i>
+                    </div>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-info text-dark border border-dark" data-i18n="common_active">Active</span>
+                </div>
+                <h3 class="text-white mb-1" data-i18n="settings_tg_connected">Telegram Bot Connected</h3>
+                <p class="text-muted mb-4" data-i18n="settings_tg_connected_sub">Alerts will be sent via Telegram to each contact's Chat ID.</p>
+                <div class="bg-black bg-opacity-50 rounded p-3 mb-4 border border-secondary d-inline-block w-100">
+                    <div class="text-uppercase text-muted small fw-bold mb-1" data-i18n="settings_tg_token_label">Bot Token</div>
+                    <div class="fs-6 text-info font-monospace text-break opacity-75">
+                        {{ printf "%.10s" .Settings.TelegramBotToken }}•••••••••
+                    </div>
+                </div>
+                <div class="d-grid gap-2">
+                    <button type="button" id="btn-test-telegram" class="btn btn-outline-info">
+                        <i class="fa-brands fa-telegram me-2"></i> <span data-i18n="settings_tg_test_btn">Send Test Message</span>
+                    </button>
+                    <button type="button" id="btn-change-telegram" class="btn btn-outline-secondary btn-sm mt-2">
+                        <i class="fa-solid fa-right-from-bracket me-2"></i> <span data-i18n="settings_tg_disconnect">Disconnect / Change Bot</span>
+                    </button>
+                </div>
+            </div>
+            <div class="card-footer bg-info bg-opacity-10 border-info text-info small">
+                <i class="fa-solid fa-shield-halved me-2"></i> <span data-i18n="settings_tg_secure">Bot Token Configured</span>
+            </div>
+        </div>
+        {{ end }}
+
+        <div id="telegram-setup-card" class="{{ if .Settings.TelegramBotToken }}d-none{{ end }}">
+            <div class="card bg-dark border-secondary text-light shadow-lg">
+                <div class="card-header border-secondary bg-black bg-opacity-25 text-center py-3">
+                    <h5 class="mb-0"><i class="fa-brands fa-telegram me-2 text-info"></i><span data-i18n="settings_tg_header">Connect Telegram Bot</span></h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert bg-dark border-info text-info-emphasis small p-3 mb-4" style="border-left: 3px solid var(--bs-info) !important; background: rgba(13,202,240,0.05) !important;">
+                        <strong class="d-block mb-1"><i class="fa-solid fa-circle-info me-1"></i> <span data-i18n="settings_tg_how_to">How to get a Bot Token</span></strong>
+                        <ol class="mb-0 ps-3">
+                            <li data-i18n="settings_tg_step1">Open Telegram and search for @BotFather</li>
+                            <li data-i18n="settings_tg_step2">Send /newbot and follow the prompts</li>
+                            <li data-i18n="settings_tg_step3">Copy the token and paste below</li>
+                        </ol>
+                    </div>
+
+                    <form action="/settings/save" method="POST" id="telegramForm">
+                        <input type="hidden" name="mqtt_address"  value="{{ .Settings.MqttAddress }}">
+                        <input type="hidden" name="smtp_host"     value="{{ .Settings.SMTPHost }}">
+                        <input type="hidden" name="smtp_port"     value="{{ .Settings.SMTPPort }}">
+                        <input type="hidden" name="smtp_user"     value="{{ .Settings.SMTPUser }}">
+                        <input type="hidden" name="smtp_pass"     value="{{ .Settings.SMTPPass }}">
+                        <input type="hidden" name="smtp_from"     value="{{ .Settings.SMTPFrom }}">
+                        <input type="hidden" name="admin_email"   value="{{ .Settings.AdminEmail }}">
+                        <input type="hidden" name="enabled"       value="{{ .Settings.Enabled }}">
+
+                        <div class="form-floating mb-4">
+                            <input type="text" class="form-control bg-black text-white border-secondary"
+                                   id="telegram_bot_token" name="telegram_bot_token"
+                                   placeholder="123456:ABC-DEF..."
+                                   value="{{ .Settings.TelegramBotToken }}" required>
+                            <label for="telegram_bot_token" class="text-muted">
+                                <i class="fa-solid fa-key me-1"></i> <span data-i18n="settings_tg_token_label">Bot Token</span>
+                            </label>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-info text-dark fw-bold py-2">
+                                <i class="fa-brands fa-telegram me-2"></i> <span data-i18n="settings_tg_connect_btn">Connect Bot</span>
+                            </button>
+                            {{ if .Settings.TelegramBotToken }}
+                            <button type="button" id="btn-cancel-telegram" class="btn btn-link text-muted mt-2 text-decoration-none small">
+                                <span data-i18n="settings_tg_cancel">Cancel</span>
+                            </button>
+                            {{ end }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div><!-- /col-md-7 -->
+
+</div><!-- /row -->
+
+<script src="/static/js/settings.js"></script>
+<script>
+// Telegram card toggle
+const btnChangeTelegram = document.getElementById('btn-change-telegram');
+const btnCancelTelegram = document.getElementById('btn-cancel-telegram');
+const telegramConnected = document.getElementById('telegram-connected-card');
+const telegramSetup     = document.getElementById('telegram-setup-card');
+const telegramFeedback  = document.getElementById('feedback-alert-telegram');
+
+function showTelegramAlert(msg, type) {
+    if (!telegramFeedback) return;
+    telegramFeedback.className = 'alert alert-' + type + ' shadow-sm mb-4';
+    telegramFeedback.textContent = msg;
+    telegramFeedback.classList.remove('d-none');
+    setTimeout(() => telegramFeedback.classList.add('d-none'), 6000);
+}
+
+if (btnChangeTelegram) {
+    btnChangeTelegram.addEventListener('click', () => {
+        telegramConnected?.classList.add('d-none');
+        telegramSetup?.classList.remove('d-none');
+    });
+}
+if (btnCancelTelegram) {
+    btnCancelTelegram.addEventListener('click', () => {
+        telegramSetup?.classList.add('d-none');
+        telegramConnected?.classList.remove('d-none');
+    });
+}
+
+const btnTestTelegram = document.getElementById('btn-test-telegram');
+if (btnTestTelegram) {
+    btnTestTelegram.addEventListener('click', async () => {
+        const chatID = prompt('Enter your Telegram Chat ID to receive the test message:\n(Message @userinfobot on Telegram to get yours)');
+        if (!chatID || !chatID.trim()) return;
+
+        btnTestTelegram.disabled = true;
+        btnTestTelegram.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Sending...';
+
+        try {
+            const fd = new FormData();
+            fd.append('chat_id', chatID.trim());
+            const res = await fetch('/settings/test-telegram', { method: 'POST', body: fd });
+            const text = await res.text();
+            if (res.ok) {
+                showTelegramAlert('✅ ' + text, 'success');
+            } else {
+                showTelegramAlert('❌ ' + text, 'danger');
+            }
+        } catch (e) {
+            showTelegramAlert('❌ Network error: ' + e.message, 'danger');
+        } finally {
+            btnTestTelegram.disabled = false;
+            btnTestTelegram.innerHTML = '<i class="fa-brands fa-telegram me-2"></i>Send Test Message';
+        }
+    });
+}
+</script>
+{{ end }}

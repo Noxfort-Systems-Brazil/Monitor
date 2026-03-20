@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Noxfort Monitor
+GenericName=Industrial Monitoring System
+Comment=Noxfort Monitor™ — Industrial Telemetry, Observability & Incident Response
+Exec=/opt/noxfort-monitor/noxfort-monitor
+Icon=/opt/noxfort-monitor/logo.png
+Terminal=false
+StartupNotify=true
+Categories=Network;Monitor;System;
+Keywords=monitor;iot;mqtt;telemetry;industrial;alert;
+X-GNOME-Autostart-enabled=true
+StartupWMClass=noxfort-monitor

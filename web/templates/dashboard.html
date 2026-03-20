@@ -1,0 +1,90 @@
+{{define "content"}}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2" data-i18n="dash_title">Systems Overview</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="text-muted small">
+            <span data-i18n="dash_last_update">Last Update</span>:
+            <time id="dash-now" datetime="{{.Now}}">{{.Now}}</time>
+        </div>
+    </div>
+</div>
+
+<h4 class="mb-3 text-danger" data-i18n="dev_title">Monitored Systems</h4>
+<div class="table-responsive mb-5 shadow-sm border rounded">
+    <table class="table table-dark table-hover mb-0 text-center align-middle">
+        <thead>
+            <tr>
+                <th data-i18n="dev_col_name">System Name</th>
+                <th data-i18n="dev_col_id" class="text-nowrap">Identifier</th>
+                <th data-i18n="dev_col_seen">Last Heartbeat</th>
+                <th data-i18n="dev_col_status">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Devices}}
+            <tr class="{{.RowClass}}">
+                <td class="fw-bold text-white">{{.Name}}</td>
+                <td>
+                    <code class="text-white bg-dark px-2 rounded border border-light">{{.Identifier}}</code>
+                </td>
+                <td class="text-white">{{.LastSeen}}</td>
+                <td>
+                    {{if eq .Status "ONLINE"}}
+                        <span class="badge bg-success" data-i18n="dash_status_ok"><i class="bi bi-check-circle me-1"></i> ONLINE</span>
+                    {{else}}
+                        <span class="badge bg-danger" data-i18n="dash_status_crit"><i class="bi bi-exclamation-octagon me-1"></i> OFFLINE</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="4" class="text-center py-4 text-muted" data-i18n="dev_empty">
+                    No devices registered. Go to <strong>Devices</strong> to add a system.
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<h4 class="mb-3 text-danger"><i class="bi bi-activity me-2"></i><span data-i18n="dash_events">Recent Alerts & Incidents</span></h4>
+<div class="table-responsive shadow-sm border rounded" style="max-height: 400px; overflow-y: auto;">
+    <table class="table table-dark table-hover align-middle mb-0 text-center">
+        <thead class="sticky-top bg-dark border-bottom">
+            <tr>
+                <th scope="col" class="text-nowrap" style="width: 15%;" data-i18n="dash_col_time">Time</th>
+                <th scope="col" style="width: 10%;" data-i18n="dash_col_level">Severity</th>
+                <th scope="col" class="text-nowrap" style="width: 15%;" data-i18n="dev_col_id">Origin</th>
+                <th scope="col" data-i18n="dash_col_message">Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .RecentIncidents}}
+            <tr>
+                <td class="text-secondary small text-nowrap">
+                    {{.OccurredAt.Format "15:04:05 02/01"}}
+                </td>
+                <td>
+                    {{if eq .Level "CRITICAL"}}
+                        <span class="badge bg-danger w-100" data-i18n="dash_status_crit">CRITICAL</span>
+                    {{else if eq .Level "WARNING"}}
+                        <span class="badge bg-warning text-dark w-100" data-i18n="dash_status_warn">WARNING</span>
+                    {{else}}
+                        <span class="badge bg-secondary w-100">{{.Level}}</span>
+                    {{end}}
+                </td>
+                <td class="fw-bold font-monospace">{{.Origin}}</td>
+                <td>{{.Message}}</td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="4" class="text-center py-5 text-muted">
+                    <i class="bi bi-shield-check fs-1 text-success d-block mb-2"></i>
+                    <span data-i18n="dash_no_events">No recent incidents recorded.</span>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
