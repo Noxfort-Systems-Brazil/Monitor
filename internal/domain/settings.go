@@ -33,6 +33,9 @@ type Settings struct {
 	MqttAddress      string `json:"mqtt_address"`       // Connection string for devices (e.g., tcp://127.0.0.1:1883)
 	Enabled          bool   `json:"enabled"`            // Master switch for email notifications
 	TelegramBotToken string `json:"telegram_bot_token"` // Telegram Bot API Token
+	NgrokAuthToken   string `json:"ngrok_auth_token"`   // Ngrok Authtoken
+	NgrokDomain      string `json:"ngrok_domain"`       // Ngrok Static Domain (e.g. your-name.ngrok-free.app)
+	NgrokEnabled     bool   `json:"ngrok_enabled"`      // Auto-start tunnel on boot
 }
 
 // SMTPSettings is a subset of settings specifically for the AlertService.

@@ -1,0 +1,235 @@
+{{ define "content" }}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4 border-bottom border-secondary">
+    <h1 class="h2 text-warning">
+        <i class="fa-solid fa-users-gear me-2"></i>
+        <span>Gerenciamento de Usuários</span>
+    </h1>
+
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-warning bg-opacity-25 text-warning border border-warning px-3 py-2">
+            <i class="fa-solid fa-crown me-1"></i>
+            Administrador: <strong class="text-white font-monospace">{{ .CurrentUser }}</strong>
+        </span>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+        <div id="action-feedback" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+        <div class="row g-4">
+            {{/* Left column: Create Operator Account */}}
+            <div class="col-lg-4">
+                <div class="card bg-dark border-secondary shadow-lg h-100">
+                    <div class="card-header border-secondary bg-black bg-opacity-25 py-3">
+                        <h5 class="mb-0 text-white">
+                            <i class="fa-solid fa-user-plus me-2 text-info"></i>
+                            <span>Novo Usuário</span>
+                        </h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <p class="text-muted small mb-4">
+                            Cadastre uma conta de <strong>Operador</strong> (somente leitura) ou <strong>Administrador</strong> (acesso completo).
+                        </p>
+
+                        <form id="addUserForm">
+                            <div class="mb-3">
+                                <label for="new_username" class="form-label text-muted small fw-bold">NOME DE USUÁRIO</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-black border-secondary text-muted"><i class="fa-solid fa-user"></i></span>
+                                    <input type="text" class="form-control bg-black text-white border-secondary"
+                                           id="new_username" name="username" placeholder="Ex: operador_noite" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="new_password" class="form-label text-muted small fw-bold">SENHA</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-black border-secondary text-muted"><i class="fa-solid fa-key"></i></span>
+                                    <input type="password" class="form-control bg-black text-white border-secondary"
+                                           id="new_password" name="password" placeholder="••••••••" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="new_role" class="form-label text-muted small fw-bold">PERFIL DE ACESSO</label>
+                                <select class="form-select bg-black text-white border-secondary" id="new_role" name="role">
+                                    <option value="OPERATOR" selected>Operador (Visualização / Dashboards)</option>
+                                    <option value="ADMIN">Administrador (Acesso Total / Configurações)</option>
+                                </select>
+                            </div>
+
+                            <div class="d-grid">
+                                <button type="submit" id="btn-add-user" class="btn btn-success py-2 fw-bold">
+                                    <i class="fa-solid fa-plus me-2"></i> Criar Conta
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            {{/* Right column: Accounts List */}}
+            <div class="col-lg-8">
+                <div class="card bg-dark border-secondary shadow-lg h-100">
+                    <div class="card-header border-secondary bg-black bg-opacity-25 d-flex justify-content-between align-items-center py-3">
+                        <h5 class="mb-0 text-white">
+                            <i class="fa-solid fa-users me-2 text-warning"></i>
+                            <span>Contas do Sistema</span>
+                        </h5>
+                        <span class="badge bg-secondary" id="user-count">{{ len .Users }} contas</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0 align-middle">
+                                <thead class="table-black border-secondary text-muted small text-uppercase">
+                                    <tr>
+                                        <th class="ps-4">Usuário</th>
+                                        <th>Perfil</th>
+                                        <th>Data de Cadastro</th>
+                                        <th class="text-end pe-4">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                    {{ range .Users }}
+                                    <tr id="user-row-{{ .Username }}">
+                                        <td class="ps-4">
+                                            <div class="d-flex align-items-center">
+                                                <div class="rounded-circle bg-secondary bg-opacity-25 p-2 me-3">
+                                                    <i class="fa-solid fa-user-circle fs-5 {{ if eq .Role "ADMIN" }}text-warning{{ else }}text-info{{ end }}"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="fw-bold font-monospace">{{ .Username }}</span>
+                                                    {{ if eq .Role "ADMIN" }}
+                                                    <span class="badge bg-warning bg-opacity-25 text-warning border border-warning ms-2 small">Super / Admin</span>
+                                                    {{ end }}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {{ if eq .Role "ADMIN" }}
+                                            <span class="badge bg-warning text-dark fw-bold">ADMINISTRADOR</span>
+                                            {{ else }}
+                                            <span class="badge bg-info bg-opacity-25 text-info border border-info">OPERADOR (LEITURA)</span>
+                                            {{ end }}
+                                        </td>
+                                        <td class="text-muted small font-monospace">
+                                            {{ .CreatedAt.Format "2006-01-02 15:04" }}
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            {{ if eq .Role "ADMIN" }}
+                                            <button class="btn btn-outline-secondary btn-sm" disabled title="A conta de Administrador não pode ser excluída">
+                                                <i class="fa-solid fa-lock"></i>
+                                            </button>
+                                            {{ else }}
+                                            <button class="btn btn-outline-danger btn-sm btn-delete-user" data-username="{{ .Username }}" title="Remover Operador">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                            {{ end }}
+                                        </td>
+                                    </tr>
+                                    {{ else }}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-4">
+                                            Nenhum usuário cadastrado.
+                                        </td>
+                                    </tr>
+                                    {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const addUserForm = document.getElementById('addUserForm');
+    const actionFeedback = document.getElementById('action-feedback');
+    const btnAddUser = document.getElementById('btn-add-user');
+
+    function showAlert(msg, type = 'success') {
+        if (!actionFeedback) return;
+        actionFeedback.className = `alert alert-${type} shadow-sm mb-4`;
+        actionFeedback.textContent = msg;
+        actionFeedback.classList.remove('d-none');
+        setTimeout(() => actionFeedback.classList.add('d-none'), 4000);
+    }
+
+    if (addUserForm) {
+        addUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('new_username')?.value.trim();
+            const password = document.getElementById('new_password')?.value;
+
+            if (!username || !password) return;
+
+            btnAddUser.disabled = true;
+            btnAddUser.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Criando...';
+
+            try {
+                const role = document.getElementById('new_role')?.value || 'OPERATOR';
+                const fd = new FormData();
+                fd.append('username', username);
+                fd.append('password', password);
+                fd.append('role', role);
+
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    body: fd
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showAlert(`✅ Usuário "${username}" (${role}) criado com sucesso!`, 'success');
+                    addUserForm.reset();
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    showAlert('❌ ' + (data.message || 'Erro ao criar usuário'), 'danger');
+                }
+            } catch (err) {
+                showAlert('❌ Erro de conexão: ' + err.message, 'danger');
+            } finally {
+                btnAddUser.disabled = false;
+                btnAddUser.innerHTML = '<i class="fa-solid fa-plus me-2"></i>Criar Conta';
+            }
+        });
+    }
+
+    document.querySelectorAll('.btn-delete-user').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const username = btn.getAttribute('data-username');
+            if (!username) return;
+
+            if (!confirm(`Deseja remover a conta do operador "${username}"?`)) {
+                return;
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('username', username);
+
+                const res = await fetch('/api/users/delete', {
+                    method: 'POST',
+                    body: fd
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showAlert(`✅ Operador "${username}" excluído.`, 'success');
+                    const row = document.getElementById(`user-row-${username}`);
+                    if (row) row.remove();
+                } else {
+                    showAlert('❌ ' + (data.message || 'Falha ao remover.'), 'danger');
+                }
+            } catch (err) {
+                showAlert('❌ Erro de rede: ' + err.message, 'danger');
+            }
+        });
+    });
+});
+</script>
+{{ end }}

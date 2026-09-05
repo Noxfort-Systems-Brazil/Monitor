@@ -40,3 +40,43 @@ document.addEventListener("DOMContentLoaded", function () {
 
     console.log("Noxfort Monitor UI Loaded.");
 });
+
+// 3. Native & Web Fullscreen Handler (F11 to toggle, Escape to exit)
+window.addEventListener("keydown", function (e) {
+    if (e.key === "F11") {
+        e.preventDefault();
+        fetch("/api/window/toggle-fullscreen", { method: "POST" })
+            .then(res => res.json())
+            .then(data => {
+                // If running in a standard web browser (non-desktop container), fallback to HTML5 Fullscreen API
+                if (data && data.desktop === false) {
+                    if (!document.fullscreenElement) {
+                        if (document.documentElement.requestFullscreen) {
+                            document.documentElement.requestFullscreen().catch(() => {});
+                        }
+                    } else {
+                        if (document.exitFullscreen) {
+                            document.exitFullscreen().catch(() => {});
+                        }
+                    }
+                }
+            })
+            .catch(() => {
+                // Network error or offline fallback
+                if (!document.fullscreenElement) {
+                    if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                }
+            });
+    } else if (e.key === "Escape") {
+        fetch("/api/window/exit-fullscreen", { method: "POST" }).catch(() => {});
+        if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+        }
+    }
+});

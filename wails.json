@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "noxfort-monitor",
+  "outputfilename": "noxfort-monitor",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "Gabriel Moraes",
+    "email": "gabriel@noxfort.com"
+  },
+  "info": {
+    "companyName": "Noxfort Systems",
+    "productName": "Noxfort Monitor",
+    "productVersion": "2.0.1",
+    "copyright": "Copyright (C) 2026 Gabriel Moraes - Noxfort Systems"
+  }
+}

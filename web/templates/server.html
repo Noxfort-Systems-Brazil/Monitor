@@ -1,0 +1,170 @@
+{{ define "content" }}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom border-secondary">
+    <div>
+        <h1 class="h2 text-primary"><i class="fa-solid fa-server me-2"></i><span data-i18n="server_title">Server & Storage Engine</span></h1>
+        <p class="text-muted mb-0 small" data-i18n="server_subtitle">Configure persistence engine, central PostgreSQL ecosystem connectivity, and live schema migrations.</p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div id="feedback-alert-db" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+        <div class="card bg-dark border-secondary text-light shadow-lg">
+            <div class="card-header border-secondary bg-black bg-opacity-25 d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0">
+                    <i class="fa-solid fa-database me-2 text-primary"></i>
+                    <span data-i18n="settings_db_header">Conexão PostgreSQL (Ecossistema Noxfort)</span>
+                </h5>
+                <span id="db-status-badge" class="badge bg-secondary">
+                    <i class="fa-solid fa-circle-notch fa-spin me-1"></i> Checking...
+                </span>
+            </div>
+            <div class="card-body p-4">
+                <!-- Status & Mode Notice -->
+                <div id="db-mode-notice" class="alert alert-dark border-secondary d-flex align-items-center mb-4 py-2 px-3">
+                    <i id="db-mode-icon" class="fa-solid fa-circle-info text-info me-2 fs-5"></i>
+                    <div class="small">
+                        <span id="db-mode-text">O Monitor opera por padrão no <strong>SQLite local</strong> (zero configuração). Conecte ao PostgreSQL para unificar ao ecossistema Noxfort com CARINA e SYNAPSE.</span>
+                    </div>
+                </div>
+
+                <form id="dbSettingsForm">
+                    <input type="hidden" name="type" id="db_type" value="postgres">
+
+                    <!-- Postgres Fields -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-8">
+                            <label for="db_host" class="form-label small text-muted" data-i18n="settings_db_host">Host / Server IP</label>
+                            <input type="text" class="form-control bg-black text-white border-secondary" id="db_host" name="host" placeholder="localhost" value="localhost">
+                        </div>
+                        <div class="col-4">
+                            <label for="db_port" class="form-label small text-muted" data-i18n="settings_db_port">Port</label>
+                            <input type="number" class="form-control bg-black text-white border-secondary" id="db_port" name="port" placeholder="5432" value="5432">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label for="db_name" class="form-label small text-muted" data-i18n="settings_db_name">Database Name</label>
+                            <input type="text" class="form-control bg-black text-white border-secondary" id="db_name" name="dbname" placeholder="banco_de_dados_noxfort" value="banco_de_dados_noxfort">
+                        </div>
+                        <div class="col-6">
+                            <label for="db_schema" class="form-label small text-muted">
+                                <span data-i18n="settings_db_schema">Schema</span>
+                                <span class="badge bg-info text-dark ms-1">Auto-Create</span>
+                            </label>
+                            <input type="text" class="form-control bg-black text-white border-secondary" id="db_schema" name="schema" placeholder="schema_monitor" value="schema_monitor">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label for="db_user" class="form-label small text-muted" data-i18n="settings_db_user">Username</label>
+                            <input type="text" class="form-control bg-black text-white border-secondary" id="db_user" name="user" placeholder="user_synapse / postgres" value="user_synapse">
+                        </div>
+                        <div class="col-6">
+                            <label for="db_pass" class="form-label small text-muted" data-i18n="settings_db_pass">Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control bg-black text-white border-secondary" id="db_pass" name="password" placeholder="••••••••">
+                                <button class="btn btn-outline-secondary" type="button" id="btn-toggle-db-pass">
+                                    <i class="fa-solid fa-eye" id="eye-icon"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <small class="text-muted">Usuário ainda não existe no banco?</small>
+                        <button type="button" class="btn btn-link btn-sm text-info p-0 text-decoration-none" id="btn-open-provision">
+                            <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Criar usuário no PostgreSQL
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="db_sslmode" class="form-label small text-muted" data-i18n="settings_db_ssl">SSL Mode</label>
+                        <select class="form-select bg-black text-white border-secondary" id="db_sslmode" name="sslmode">
+                            <option value="disable" selected>disable (Local / Rede Interna)</option>
+                            <option value="require">require (Produção com TLS)</option>
+                        </select>
+                        <small class="form-text text-muted mt-1 d-block" data-i18n="settings_db_schema_note">
+                            <i class="fa-solid fa-circle-info me-1 text-info"></i> Se o schema não existir, o Monitor criará automaticamente com tabelas e índices de auditoria.
+                        </small>
+                    </div>
+
+                    <!-- Migrate Data Checkbox -->
+                    <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" id="db_migrate" name="migrate" checked>
+                        <label class="form-check-label text-muted small" for="db_migrate" data-i18n="settings_db_migrate_label">
+                            Migrar dados existentes do SQLite local para o PostgreSQL
+                        </label>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" id="btn-test-db" class="btn btn-outline-primary flex-grow-1 py-2">
+                            <i class="fa-solid fa-plug me-2"></i> <span data-i18n="settings_db_test_btn">Testar Conexão</span>
+                        </button>
+                        <button type="button" id="btn-save-db" class="btn btn-primary flex-grow-1 py-2 fw-bold">
+                            <i class="fa-solid fa-floppy-disk me-2"></i> <span data-i18n="settings_db_save_btn">Salvar e Conectar</span>
+                        </button>
+                    </div>
+
+                    <!-- Revert / Disconnect back to SQLite (shown only when PostgreSQL is active) -->
+                    <div id="revert-sqlite-container" class="text-center d-none border-top border-secondary pt-3 mt-3">
+                        <button type="button" id="btn-revert-sqlite" class="btn btn-sm btn-outline-secondary">
+                            <i class="fa-solid fa-rotate-left me-1"></i> Desconectar e Voltar ao SQLite Local
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer bg-black bg-opacity-25 border-secondary text-muted small d-flex justify-content-between">
+                <span><i class="fa-solid fa-shield-halved me-1 text-success"></i> <span data-i18n="settings_db_audit_enabled">Auditoria Industrial Ativa</span></span>
+                <span id="db-latency-display">-- ms</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Provisionar Usuário PostgreSQL -->
+<div class="modal fade" id="modalProvisionPG" tabindex="-1" aria-labelledby="modalProvisionPGLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-secondary shadow-lg">
+            <div class="modal-header border-secondary bg-black bg-opacity-25">
+                <h5 class="modal-title" id="modalProvisionPGLabel">
+                    <i class="fa-solid fa-wand-magic-sparkles text-info me-2"></i> Provisionar Usuário no PostgreSQL
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="small text-muted mb-3">
+                    O Monitor conectará como administrador do PostgreSQL para criar o usuário <strong class="text-warning" id="prov-target-user">user_monitor</strong> com a senha informada e conceder privilégios totais no banco.
+                </p>
+
+                <div id="prov-alert" class="alert d-none small mb-3"></div>
+
+                <form id="provisionUserForm">
+                    <div class="mb-3">
+                        <label for="admin_user" class="form-label small text-muted">Usuário Administrador (com permissão de criar contas)</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" id="admin_user" value="postgres" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="admin_password" class="form-label small text-muted">Senha do Administrador</label>
+                        <input type="password" class="form-control bg-black text-white border-secondary" id="admin_password" placeholder="Senha do postgres" required>
+                        <div class="form-text text-muted small">Informe a senha da conta de administração do seu PostgreSQL (ex: postgres).</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary bg-black bg-opacity-25">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btn-submit-provision" class="btn btn-primary fw-bold">
+                    <i class="fa-solid fa-wand-magic-sparkles me-2"></i> Criar Usuário e Conectar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/settings_db_api.js"></script>
+<script src="/static/js/settings_db_view.js"></script>
+<script src="/static/js/settings_db.js"></script>
+{{ end }}

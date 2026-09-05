@@ -49,6 +49,16 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="notify_critical" name="notify_critical">
+                            <label class="form-check-label" for="notify_critical" data-i18n="contact_notify_critical_label">Receive critical alerts only</label>
+                        </div>
+                        <div class="form-text text-muted small" data-i18n="contact_notify_critical_hint">
+                            If disabled, receives all alerts (Warning & Critical).
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn btn-info w-100">
                         <i class="fa-solid fa-plus me-2"></i> <span data-i18n="contact_register_btn">Register Contact</span>
                     </button>
@@ -110,7 +120,17 @@
                                         <span class="badge bg-success bg-opacity-25 text-success border border-success" data-i18n="contact_alert_warning_critical">WARNING &amp; CRITICAL</span>
                                     {{ end }}
                                 </td>
-                                <td class="text-end pe-4">
+                                <td class="text-end pe-4 text-nowrap">
+                                    <button type="button" class="btn btn-outline-warning btn-sm me-1 btn-edit-contact"
+                                            data-id="{{ .ID }}"
+                                            data-name="{{ .Name }}"
+                                            data-role="{{ .Role }}"
+                                            data-email="{{ .Email }}"
+                                            data-phone="{{ .Phone }}"
+                                            data-telegram="{{ .TelegramChatID }}"
+                                            data-notify-critical="{{ .NotifyCritical }}">
+                                        <i class="fa-solid fa-pen-to-square"></i> <span data-i18n="common_btn_edit">Edit</span>
+                                    </button>
                                     <form action="/contacts/delete" method="POST" class="d-inline">
                                         <input type="hidden" name="id" value="{{ .ID }}">
                                         <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(window._t('contact_confirm_remove') || 'Remove?');">
@@ -135,4 +155,119 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Contact Modal -->
+<div class="modal fade" id="editContactModal" tabindex="-1" aria-labelledby="editContactModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-secondary text-white shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="editContactModalLabel">
+                    <i class="fa-solid fa-user-pen text-warning me-2"></i><span data-i18n="contact_edit_title">Edit Team Member</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/contacts/update" method="POST">
+                <input type="hidden" id="edit_id" name="id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label" data-i18n="contact_col_name">Full Name</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" id="edit_name" name="name" required placeholder="Ex: John Doe">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_role" class="form-label" data-i18n="contact_col_role">Role / Position</label>
+                        <select class="form-select bg-black text-white border-secondary" id="edit_role" name="role">
+                            <option value="System Admin" data-i18n="contact_role_admin">System Admin</option>
+                            <option value="Technician" data-i18n="contact_role_technician">Technician</option>
+                            <option value="Programmer" data-i18n="contact_role_programmer">Programmer</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_email" class="form-label" data-i18n="contact_col_email">Email Address</label>
+                        <input type="email" class="form-control bg-black text-white border-secondary" id="edit_email" name="email" required placeholder="email@noxfort.com">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_phone" class="form-label" data-i18n="contact_col_phone">Phone (Optional)</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" id="edit_phone" name="phone" placeholder="+55 ...">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_telegram" class="form-label">
+                            <i class="fa-brands fa-telegram text-info me-1"></i> Telegram Chat ID <span class="text-muted small">(<span data-i18n="contact_col_phone">Optional</span>)</span>
+                        </label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" id="edit_telegram" name="telegram_chat_id" placeholder="Ex: 123456789">
+                        <div class="form-text text-muted small">
+                            <span data-i18n="contact_telegram_hint_pre">Get your ID by messaging</span>
+                            <a href="https://t.me/userinfobot" target="_blank" class="text-info">@userinfobot</a>
+                            <span data-i18n="contact_telegram_hint_post">on Telegram.</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="edit_notify_critical" name="notify_critical">
+                            <label class="form-check-label" for="edit_notify_critical" data-i18n="contact_notify_critical_label">Receive critical alerts only</label>
+                        </div>
+                        <div class="form-text text-muted small" data-i18n="contact_notify_critical_hint">
+                            If disabled, receives all alerts (Warning & Critical).
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="common_btn_cancel">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold">
+                        <i class="fa-solid fa-floppy-disk me-2"></i><span data-i18n="contact_save_btn">Save Changes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const editModalEl = document.getElementById('editContactModal');
+    let editModal = null;
+    if (editModalEl && typeof bootstrap !== 'undefined') {
+        editModal = new bootstrap.Modal(editModalEl);
+    }
+
+    document.querySelectorAll('.btn-edit-contact').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const id = this.getAttribute('data-id');
+            const name = this.getAttribute('data-name');
+            const role = this.getAttribute('data-role');
+            const email = this.getAttribute('data-email');
+            const phone = this.getAttribute('data-phone');
+            const telegram = this.getAttribute('data-telegram');
+            const notifyCritical = this.getAttribute('data-notify-critical') === 'true';
+
+            document.getElementById('edit_id').value = id;
+            document.getElementById('edit_name').value = name;
+            document.getElementById('edit_email').value = email;
+            document.getElementById('edit_phone').value = phone || '';
+            document.getElementById('edit_telegram').value = telegram || '';
+            document.getElementById('edit_notify_critical').checked = notifyCritical;
+
+            // Match role
+            const roleSelect = document.getElementById('edit_role');
+            if (roleSelect) {
+                for (let i = 0; i < roleSelect.options.length; i++) {
+                    if (roleSelect.options[i].value.toLowerCase() === role.toLowerCase()) {
+                        roleSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (window.applyI18n) window.applyI18n();
+            if (editModal) {
+                editModal.show();
+            }
+        });
+    });
+});
+</script>
 {{ end }}

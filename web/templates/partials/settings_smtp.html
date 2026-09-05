@@ -1,0 +1,131 @@
+{{ define "settings_smtp" }}
+{{/* ─── SMTP / Email Card ─── */}}
+<div id="feedback-alert-smtp" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+{{ if .Settings.SMTPUser }}
+<div id="connected-card" class="card bg-dark border-success shadow-lg text-center fade-in">
+    <div class="card-body p-5">
+        <div class="mb-4 position-relative d-inline-block">
+            <div class="rounded-circle bg-success bg-opacity-10 p-4 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px; margin: 0 auto;">
+                <i class="fa-solid fa-user-shield fa-3x text-success"></i>
+            </div>
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success border border-dark" data-i18n="common_active">Active</span>
+        </div>
+        <h3 class="text-white mb-1" data-i18n="settings_smtp_authenticated">System Authenticated</h3>
+        <p class="text-muted mb-4" data-i18n="settings_smtp_authenticated_sub">Alerts are being sent via this identity.</p>
+        <div class="bg-black bg-opacity-50 rounded p-3 mb-4 border border-secondary d-inline-block w-100">
+            <div class="text-uppercase text-muted small fw-bold mb-1" data-i18n="settings_smtp_current_sender">Current Sender</div>
+            <div class="fs-5 text-info font-monospace text-break">{{ .Settings.SMTPUser }}</div>
+            <div class="mt-2 small text-muted">
+                <i class="fa-solid fa-server me-1"></i>
+                {{ if eq .Settings.SMTPHost "smtp.gmail.com" }}<span data-i18n="settings_smtp_provider_google">Google Workspace</span>
+                {{ else if eq .Settings.SMTPHost "smtp.office365.com" }}<span data-i18n="settings_smtp_provider_outlook">Microsoft Outlook</span>
+                {{ else }}<span data-i18n="settings_smtp_provider_custom">Custom SMTP Server</span>
+                {{ end }}
+            </div>
+        </div>
+        <div class="d-grid gap-2">
+            <button type="button" id="btn-test-existing" class="btn btn-outline-light">
+                <i class="fa-solid fa-paper-plane me-2"></i> <span data-i18n="settings_btn_test">Send Test Alert</span>
+            </button>
+            <button type="button" id="btn-change-account" class="btn btn-outline-secondary btn-sm mt-2">
+                <i class="fa-solid fa-right-from-bracket me-2"></i> <span data-i18n="settings_smtp_disconnect">Disconnect / Change Account</span>
+            </button>
+        </div>
+    </div>
+    <div class="card-footer bg-success bg-opacity-10 border-success text-success small">
+        <i class="fa-solid fa-shield-halved me-2"></i> <span data-i18n="settings_smtp_secure">Secure Connection Established</span>
+    </div>
+</div>
+{{ end }}
+
+<div id="setup-card" class="{{ if .Settings.SMTPUser }}d-none{{ end }}">
+    <div class="card bg-dark border-secondary text-light shadow-lg">
+        <div class="card-header border-secondary bg-black bg-opacity-25 text-center py-3">
+            <h5 class="mb-0"><i class="fa-solid fa-envelope me-2"></i><span data-i18n="settings_smtp_header">SMTP Configuration (Email)</span></h5>
+        </div>
+        <div class="card-body p-4">
+            <form action="/settings/save" method="POST" id="settingsForm">
+                <input type="hidden" name="mqtt_address" value="{{ .Settings.MqttAddress }}">
+                <input type="hidden" name="enabled" value="on">
+                <input type="hidden" name="telegram_bot_token" value="{{ .Settings.TelegramBotToken }}">
+
+                <p class="text-center text-muted small mb-3" data-i18n="settings_smtp_connect_provider">Select your email provider to sign in</p>
+                <div class="row g-2 mb-4">
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="provider_select" id="prov_gmail" value="gmail" autocomplete="off">
+                        <label class="btn btn-outline-light w-100 py-3 border-secondary opacity-75" for="prov_gmail">
+                            <i class="fa-brands fa-google fs-4 mb-1 text-danger"></i><br><small>Gmail</small>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="provider_select" id="prov_outlook" value="outlook" autocomplete="off">
+                        <label class="btn btn-outline-light w-100 py-3 border-secondary opacity-75" for="prov_outlook">
+                            <i class="fa-brands fa-microsoft fs-4 mb-1 text-primary"></i><br><small>Outlook</small>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="provider_select" id="prov_custom" value="custom" autocomplete="off">
+                        <label class="btn btn-outline-light w-100 py-3 border-secondary opacity-75" for="prov_custom">
+                            <i class="fa-solid fa-server fs-4 mb-1 text-warning"></i><br><small>Other</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="guide_panel" class="alert alert-info bg-dark border-info d-none mb-4">
+                    <div class="d-flex">
+                        <i class="fa-solid fa-key fs-4 me-3 mt-1"></i>
+                        <div>
+                            <strong class="d-block mb-1" data-i18n="settings_smtp_app_password">App Password Required</strong>
+                            <span class="small opacity-75" id="guide_text">...</span>
+                            <div class="mt-2">
+                                <a href="#" target="_blank" id="guide_link" class="btn btn-sm btn-info text-dark fw-bold">
+                                    Generate Password <i class="fa-solid fa-external-link-alt ms-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-floating mb-3">
+                    <input type="email" class="form-control bg-black text-white border-secondary"
+                           id="smtp_user" name="smtp_user" placeholder="Email"
+                           value="{{ .Settings.SMTPUser }}" required>
+                    <label for="smtp_user" class="text-muted" data-i18n="settings_smtp_email_label">Email Address</label>
+                </div>
+                <div class="form-floating mb-4">
+                    <input type="password" class="form-control bg-black text-white border-secondary"
+                           id="smtp_pass" name="smtp_pass" placeholder="App Password"
+                           value="{{ .Settings.SMTPPass }}">
+                    <label for="smtp_pass" class="text-muted" id="pass_label" data-i18n="settings_smtp_pass_label">Password</label>
+                </div>
+
+                <div id="technical_section" class="d-none mb-3">
+                    <div class="row g-2">
+                        <div class="col-8">
+                            <input type="text" class="form-control form-control-sm bg-dark text-muted border-secondary" id="smtp_host" name="smtp_host" value="{{ .Settings.SMTPHost }}" placeholder="SMTP Host">
+                        </div>
+                        <div class="col-4">
+                            <input type="text" class="form-control form-control-sm bg-dark text-muted border-secondary" id="smtp_port" name="smtp_port" value="{{ .Settings.SMTPPort }}" placeholder="Port">
+                        </div>
+                        <div class="col-12 mt-2">
+                            <input type="text" class="form-control form-control-sm bg-dark text-muted border-secondary" id="smtp_from" name="smtp_from" value="{{ .Settings.SMTPFrom }}" placeholder="Sender Name (Optional)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-success py-2">
+                        <i class="fa-solid fa-link me-2"></i> <span data-i18n="settings_btn_save">Connect Account</span>
+                    </button>
+                    {{ if .Settings.SMTPUser }}
+                    <button type="button" id="btn-cancel-edit" class="btn btn-link text-muted mt-2 text-decoration-none small">
+                        <span data-i18n="settings_smtp_cancel">Cancel</span>
+                    </button>
+                    {{ end }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{ end }}

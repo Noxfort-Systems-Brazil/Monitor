@@ -60,6 +60,9 @@ type ContactRepository interface {
 	// CreateContact adds a new contact to the database.
 	CreateContact(contact *Contact) error
 
+	// UpdateContact updates an existing contact in the database.
+	UpdateContact(contact *Contact) error
+
 	// DeleteContact removes a contact by its ID.
 	DeleteContact(id int64) error
 }

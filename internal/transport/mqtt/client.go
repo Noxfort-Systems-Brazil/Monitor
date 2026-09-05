@@ -21,13 +21,12 @@
 package mqtt
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
-	"noxfort-monitor-server/internal/domain"
 	"noxfort-monitor-server/internal/monitor"
+	"noxfort-monitor-server/internal/protocol"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -36,13 +35,13 @@ import (
 // It bridges the gap between raw MQTT messages and the Domain Logic.
 type Client struct {
 	internalClient mqtt.Client
-	stateManager   *monitor.StateManager
+	stateManager   monitor.EventProcessor
 	topicPattern   string
 }
 
 // NewClient creates a configured MQTT client instance.
 // It subscribes to a wildcard topic to catch all system events.
-func NewClient(brokerURL string, sm *monitor.StateManager) *Client {
+func NewClient(brokerURL string, sm monitor.EventProcessor) *Client {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
 	opts.SetClientID("noxfort-monitor-server")
@@ -81,29 +80,19 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-// handleMessage is the pipeline entry point: Raw JSON -> IncomingEvent -> State Manager.
+// handleMessage is the pipeline entry point: Raw JSON -> DecodePayload -> State Manager.
 func (c *Client) handleMessage(client mqtt.Client, msg mqtt.Message) {
 	payload := msg.Payload()
 
-	// 1. Decode the JSON packet directly into the Domain Struct
-	// This implements the "Universal JSON" logic.
-	var event domain.IncomingEvent
-	if err := json.Unmarshal(payload, &event); err != nil {
+	// Decode and validate using the unified protocol decoder (Single Responsibility / DRY)
+	event, err := protocol.DecodePayload(payload)
+	if err != nil {
 		log.Printf("[MQTT] Decode Error on topic %s: %v", msg.Topic(), err)
 		return
 	}
 
-	// 2. Validate Origin
-	// The "Origin" field (e.g., "synapse") is our unique Identifier.
-	if event.Origin == "" {
-		log.Printf("[MQTT] Ignored event with empty 'origin' on topic %s", msg.Topic())
-		return
-	}
-
-	// 3. Pass the event to the State Manager
-	// The State Manager will decide if it's a Heartbeat (Info) or an Incident (Critical)
-	// We use event.Origin as the Identifier.
-	c.stateManager.ProcessEvent(event.Origin, &event)
+	// Pass the validated event to the State Manager
+	c.stateManager.ProcessEvent(event.Origin, event)
 }
 
 // Disconnect gracefully closes the connection.

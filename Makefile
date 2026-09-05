@@ -11,7 +11,7 @@
 # Date: 2026-01-13
 
 # Binary output name
-BINARY_NAME=bin/noxfort-server
+BINARY_NAME=bin/noxfort-monitor
 MAIN_PATH=cmd/server/main.go
 MOSQUITTO_CONF=mosquitto/config/mosquitto.conf
 
@@ -20,16 +20,21 @@ all: build
 
 # 1. Build the executable
 build:
-	@echo "🔨 Building Noxfort Monitor..."
+	@echo "🔨 Building Noxfort Monitor Desktop (Wails v2)..."
 	@mkdir -p bin
-	go build -o $(BINARY_NAME) $(MAIN_PATH)
-	@echo "✅ Build successful! Binary created at $(BINARY_NAME)"
+	GOTOOLCHAIN=local go build -tags "production,webkit2_41" -ldflags="-s -w" -o $(BINARY_NAME) $(MAIN_PATH)
+	@echo "✅ Build successful! Desktop Binary created at $(BINARY_NAME)"
 
 # 2. Run the application directly (Development mode)
 #    Make sure to run 'make broker-start' first.
 run:
-	@echo "🚀 Running Server... (ensure broker is running: make broker-start)"
-	go run $(MAIN_PATH)
+	@echo "🚀 Running Desktop Application... (ensure broker is running: make broker-start)"
+	GOTOOLCHAIN=local go run -tags "production,webkit2_41" $(MAIN_PATH)
+
+# 2b. Run in headless mode without GUI
+run-headless:
+	@echo "🚀 Running Server in Headless Mode... (ensure broker is running: make broker-start)"
+	GOTOOLCHAIN=local go run -tags "production,webkit2_41" $(MAIN_PATH) --headless
 
 # 3. Clean up build artifacts
 clean:
@@ -96,4 +101,9 @@ broker-install:
 	sudo apt-get update -qq && sudo apt-get install -y mosquitto
 	@echo "✅ Mosquitto installed."
 
-.PHONY: all build run clean test deps build-linux broker-start broker-stop broker-status broker-install
+# 11. Generate .deb Installer Package
+deb:
+	@chmod +x build_installer.sh
+	@./build_installer.sh
+
+.PHONY: all build run clean test deps build-linux broker-start broker-stop broker-status broker-install deb

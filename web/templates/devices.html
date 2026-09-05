@@ -3,23 +3,19 @@
     <h1 class="h2" data-i18n="dev_title">Monitored Systems</h1>
 </div>
 
-<div class="card mb-4 shadow-sm" style="border-left: 5px solid #0d6efd;">
+<div class="card mb-4 shadow-sm bg-dark border-secondary" style="border-left: 5px solid #0dcaf0 !important;">
     <div class="card-body py-3">
-        <div class="row align-items-center">
-            <div class="col-md-4">
-                <h6 class="mb-0 text-primary">
-                    <i class="bi bi-hdd-network"></i> <span data-i18n="dev_server_host_label">Server Host (IP)</span>
-                </h6>
-                <small class="text-muted" data-i18n="dev_server_host_hint">Paste this IP into the Synapse/Carina configuration.</small>
-            </div>
-            <div class="col-md-8">
-                <div class="input-group">
-                    <input type="text" class="form-control font-monospace bg-light fw-bold" id="pushTargetInput" readonly value="Loading...">
-                    <button class="btn btn-primary" type="button" onclick="copyPushTarget()" id="copyBtn">
-                        <i class="bi bi-clipboard"></i> <span data-i18n="dev_copy_ip">Copy IP</span>
-                    </button>
-                </div>
-            </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-bold text-uppercase text-info">
+                <i class="fa-solid fa-earth-americas me-1"></i> <span data-i18n="dev_server_host_label">Endereço de Telemetria (Ngrok)</span>
+            </span>
+            <small class="text-muted" data-i18n="dev_server_host_hint">Cole este endereço na configuração do Synapse, Carina ou qualquer máquina externa.</small>
+        </div>
+        <div class="input-group">
+            <input type="text" class="form-control font-monospace bg-black text-info border-secondary fw-bold" id="pushTargetInput" readonly value="{{.ServerIP}}">
+            <button class="btn btn-info text-dark fw-bold" type="button" onclick="copyPushTarget()" id="copyBtn">
+                <i class="fa-solid fa-copy me-1"></i> <span data-i18n="dev_copy_ip">Copiar Endereço</span>
+            </button>
         </div>
     </div>
 </div>
@@ -75,7 +71,17 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         var input = document.getElementById('pushTargetInput');
-        input.value = "127.0.0.1";
+        var serverIP = "{{.ServerIP}}";
+        if (serverIP && serverIP !== "") {
+            input.value = serverIP;
+        } else {
+            var host = window.location.hostname;
+            if (host && host !== "wails" && host !== "localhost" && host !== "127.0.0.1") {
+                input.value = host;
+            } else {
+                input.value = "127.0.0.1";
+            }
+        }
     });
 
     function copyPushTarget() {
@@ -85,12 +91,11 @@
         navigator.clipboard.writeText(copyText.value).then(function() {
             var btn = document.getElementById("copyBtn");
             var originalHtml = btn.innerHTML;
-            btn.className = "btn btn-success";
-            btn.innerHTML = "<i class='bi bi-check'></i> <span data-i18n='dev_copied'>Copied!</span>";
-            // Re-apply i18n to the new span
+            btn.className = "btn btn-success fw-bold";
+            btn.innerHTML = "<i class='fa-solid fa-check me-1'></i> <span data-i18n='dev_copied'>Copiado!</span>";
             if (window.applyI18n) window.applyI18n();
             setTimeout(function(){
-                btn.className = "btn btn-primary";
+                btn.className = "btn btn-info text-dark fw-bold";
                 btn.innerHTML = originalHtml;
                 if (window.applyI18n) window.applyI18n();
             }, 2000);

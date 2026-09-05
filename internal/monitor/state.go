@@ -17,54 +17,111 @@
 // File: internal/monitor/state.go
 // Author: Gabriel Moraes
 // Date: 2026-01-19
+// Modified: 2026-09-04 (SOLID Refactor)
 
 package monitor
 
 import (
 	"log"
 	"strings"
+	"time"
 
 	"noxfort-monitor-server/internal/domain"
 )
 
-// StateManager orchestrates the logic between incoming events, storage, and alerts.
-// It acts as the central decision maker of the system.
+// EventProcessor is the contract for components that ingest and process system telemetry messages.
+type EventProcessor interface {
+	ProcessEvent(identifier string, event *domain.IncomingEvent)
+}
+
+// DeviceHeartbeatUpdater records the latest activity timestamp of a device.
+type DeviceHeartbeatUpdater interface {
+	UpdateLastSeen(identifier string, lastSeen time.Time) error
+}
+
+// HeartbeatDetector determines whether an incoming event is a routine keep-alive or an incident.
+type HeartbeatDetector interface {
+	IsHeartbeat(event *domain.IncomingEvent) bool
+}
+
+// KeywordHeartbeatDetector detects heartbeats using INFO level and matching phrases.
+type KeywordHeartbeatDetector struct {
+	keywords []string
+}
+
+// NewKeywordHeartbeatDetector initializes a detector with default or custom keep-alive keywords.
+func NewKeywordHeartbeatDetector(keywords ...string) *KeywordHeartbeatDetector {
+	if len(keywords) == 0 {
+		keywords = []string{"system ok", "heartbeat", "online", "ativo", "ok"}
+	}
+	return &KeywordHeartbeatDetector{keywords: keywords}
+}
+
+// IsHeartbeat returns true if the event has LevelInfo and contains keep-alive text.
+func (d *KeywordHeartbeatDetector) IsHeartbeat(event *domain.IncomingEvent) bool {
+	if event == nil || event.Level != domain.LevelInfo {
+		return false
+	}
+	lower := strings.ToLower(event.Message)
+	for _, kw := range d.keywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// StateManager orchestrates incoming events, device heartbeats, incident audit logging, and alert triggers.
 type StateManager struct {
-	telemetryRepo domain.TelemetryRepository
-	deviceRepo    domain.DeviceRepository
-	alertService  *AlertService
+	events   EventRecorder
+	devices  DeviceHeartbeatUpdater
+	alerts   AlertDispatcher
+	detector HeartbeatDetector
 }
 
-// NewStateManager creates a new instance with all required dependencies injected.
+// NewStateManager creates a new StateManager with default keyword heartbeat detection.
 func NewStateManager(
-	tRepo domain.TelemetryRepository,
-	dRepo domain.DeviceRepository,
-	alerts *AlertService,
+	tRepo EventRecorder,
+	dRepo DeviceHeartbeatUpdater,
+	alerts AlertDispatcher,
 ) *StateManager {
+	return NewStateManagerWithDetector(tRepo, dRepo, alerts, NewKeywordHeartbeatDetector())
+}
+
+// NewStateManagerWithDetector creates a StateManager with an injected HeartbeatDetector (OCP / DIP).
+func NewStateManagerWithDetector(
+	tRepo EventRecorder,
+	dRepo DeviceHeartbeatUpdater,
+	alerts AlertDispatcher,
+	detector HeartbeatDetector,
+) *StateManager {
+	if detector == nil {
+		detector = NewKeywordHeartbeatDetector()
+	}
 	return &StateManager{
-		telemetryRepo: tRepo,
-		deviceRepo:    dRepo,
-		alertService:  alerts,
+		events:   tRepo,
+		devices:  dRepo,
+		alerts:   alerts,
+		detector: detector,
 	}
 }
 
-// ProcessEvent is the main entry point for incoming messages (MQTT/HTTP).
-// It applies the "Filter & Act" logic using the Universal Identifier.
+// ProcessEvent is the main entry point for incoming telemetry messages (MQTT / HTTP).
+// It updates the system heartbeat, filters out keep-alives, persists incidents, and alerts operators.
 func (sm *StateManager) ProcessEvent(identifier string, event *domain.IncomingEvent) {
-	// 1. Heartbeat: Always update the system's last seen status.
-	// This ensures the Watchdog knows the system is alive, even if it's reporting an error.
-	if err := sm.deviceRepo.UpdateLastSeen(identifier, event.OccurredAt); err != nil {
-		log.Printf("[STATE] Failed to update heartbeat for %s: %v", identifier, err)
-		// We continue, as failing to update heartbeat shouldn't block alert processing.
+	if event == nil {
+		return
 	}
 
-	// 2. Filter: Check if this is a "Noise" message (System OK) or an "Incident".
-	// Using the Universal JSON "level" field to decide.
-	isHeartbeat := event.Level == domain.LevelInfo && isSystemOkMessage(event.Message)
+	// 1. Heartbeat: Always update the system's last seen status.
+	if sm.devices != nil {
+		if err := sm.devices.UpdateLastSeen(identifier, event.OccurredAt); err != nil {
+			log.Printf("[STATE] Failed to update heartbeat for %s: %v", identifier, err)
+		}
+	}
 
-	if isHeartbeat {
-		// It's just a heartbeat. We already updated LastSeen.
-		// No need to save to DB or Alert.
+	// 2. Filter: Determine if this is a keep-alive heartbeat or an actual incident.
+	if sm.detector.IsHeartbeat(event) {
 		return
 	}
 
@@ -72,20 +129,14 @@ func (sm *StateManager) ProcessEvent(identifier string, event *domain.IncomingEv
 	log.Printf("🚨 [INCIDENT] System: %s | Level: %s | Msg: %s", identifier, event.Level, event.Message)
 
 	// A. Persist the Incident for Audit
-	if err := sm.telemetryRepo.SaveEvent(identifier, event); err != nil {
-		log.Printf("[STATE] CRITICAL: Failed to save incident to DB: %v", err)
+	if sm.events != nil {
+		if err := sm.events.SaveEvent(identifier, event); err != nil {
+			log.Printf("[STATE] CRITICAL: Failed to save incident to DB: %v", err)
+		}
 	}
 
-	// B. Trigger Human Notification (SMS/Email)
-	// We pass the raw data to the AlertService which handles formatting and contacts.
-	sm.alertService.TriggerAlert(identifier, event)
-}
-
-// isSystemOkMessage checks if the message is a standard keep-alive message.
-// This allows us to filter out "System OK" or "Heartbeat" texts.
-func isSystemOkMessage(msg string) bool {
-	lower := strings.ToLower(msg)
-	return strings.Contains(lower, "system ok") ||
-		strings.Contains(lower, "heartbeat") ||
-		strings.Contains(lower, "online")
+	// B. Trigger Alert Dispatch
+	if sm.alerts != nil {
+		sm.alerts.TriggerAlert(identifier, event)
+	}
 }

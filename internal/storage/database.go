@@ -42,6 +42,9 @@ func NewDatabase(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	// Single open connection for SQLite ensures thread-safe sequential writes
+	db.SetMaxOpenConns(1)
+
 	// Enable Foreign Keys
 	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
@@ -131,6 +134,22 @@ func initSchema(db *sql.DB) error {
 		}
 	}
 
+	// 3.3 Migration: Ensure ngrok settings exist.
+	migrationNgrokToken := "ALTER TABLE settings ADD COLUMN ngrok_auth_token TEXT DEFAULT '';"
+	if _, err := db.Exec(migrationNgrokToken); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		log.Printf("[STORAGE] Migration Note: %v (Normal if column exists)", err)
+	}
+
+	migrationNgrokDomain := "ALTER TABLE settings ADD COLUMN ngrok_domain TEXT DEFAULT '';"
+	if _, err := db.Exec(migrationNgrokDomain); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		log.Printf("[STORAGE] Migration Note: %v (Normal if column exists)", err)
+	}
+
+	migrationNgrokEnabled := "ALTER TABLE settings ADD COLUMN ngrok_enabled BOOLEAN DEFAULT 0;"
+	if _, err := db.Exec(migrationNgrokEnabled); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		log.Printf("[STORAGE] Migration Note: %v (Normal if column exists)", err)
+	}
+
 	// Ensure the default settings row exists
 	queryInitSettings := `INSERT OR IGNORE INTO settings (id) VALUES (1);`
 	if _, err := db.Exec(queryInitSettings); err != nil {
@@ -161,6 +180,75 @@ func initSchema(db *sql.DB) error {
 		if !strings.Contains(err.Error(), "duplicate column") {
 			log.Printf("[STORAGE] Migration Note: %v (Normal if category exists)", err)
 		}
+	}
+
+	// 5. Users Table (Role-based access & authentication)
+	queryUsers := `
+	CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		role TEXT NOT NULL DEFAULT 'OPERATOR',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+	if _, err := db.Exec(queryUsers); err != nil {
+		return fmt.Errorf("error creating users table: %w", err)
+	}
+
+	// 5.1 Migration: Ensure legacy SUPERUSER/MASTER roles map to ADMIN
+	_, _ = db.Exec("UPDATE users SET role = 'ADMIN' WHERE role IN ('SUPERUSER', 'MASTER');")
+
+	// 5.2 Migration: Ensure primary administrator account is restored to ADMIN if demoted
+	_, _ = db.Exec(`
+		UPDATE users SET role = 'ADMIN' 
+		WHERE id = (
+			SELECT MIN(id) FROM users WHERE username NOT IN ('superuser_noxfort', 'admin')
+		) 
+		AND (SELECT COUNT(*) FROM users WHERE role = 'ADMIN' AND username NOT IN ('superuser_noxfort', 'admin')) = 0;
+	`)
+
+	// 6. Security Audit Logs Table
+	querySecAudit := `
+	CREATE TABLE IF NOT EXISTS security_audit_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		username TEXT NOT NULL,
+		action TEXT NOT NULL,
+		details TEXT,
+		ip_address TEXT
+	);`
+	if _, err := db.Exec(querySecAudit); err != nil {
+		return fmt.Errorf("error creating security_audit_logs table: %w", err)
+	}
+
+	// 7. Alert Dispatch Logs Table
+	queryAlertLogs := `
+	CREATE TABLE IF NOT EXISTS alert_dispatch_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		telemetry_id INTEGER,
+		channel TEXT NOT NULL,
+		recipient TEXT NOT NULL,
+		role TEXT,
+		status TEXT NOT NULL,
+		error_reason TEXT,
+		dispatched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+	if _, err := db.Exec(queryAlertLogs); err != nil {
+		return fmt.Errorf("error creating alert_dispatch_logs table: %w", err)
+	}
+
+	// 8. Device State Transitions Table (Watchdog Uptime)
+	queryTransitions := `
+	CREATE TABLE IF NOT EXISTS device_state_transitions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		device_identifier TEXT NOT NULL,
+		previous_state TEXT,
+		new_state TEXT NOT NULL,
+		duration_offline_sec INTEGER DEFAULT 0,
+		transition_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+	if _, err := db.Exec(queryTransitions); err != nil {
+		return fmt.Errorf("error creating device_state_transitions table: %w", err)
 	}
 
 	log.Println("[STORAGE] Database schema initialized successfully.")

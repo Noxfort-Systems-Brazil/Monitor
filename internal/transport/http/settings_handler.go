@@ -17,6 +17,7 @@
 // File: internal/transport/http/settings_handler.go
 // Author: Gabriel Moraes
 // Date: 2026-01-18
+// Modified: 2026-09-04 (SOLID Refactor)
 
 package http
 
@@ -24,24 +25,53 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"noxfort-monitor-server/internal/appdir"
 	"strconv"
+	"strings"
 
+	"noxfort-monitor-server/internal/appdir"
 	"noxfort-monitor-server/internal/domain"
-	"noxfort-monitor-server/internal/monitor"
 )
+
+// ConnectionTester defines the contract required to test notification channel credentials.
+type ConnectionTester interface {
+	TestConnection(settings *domain.Settings, to string) error
+	TestTelegramConnection(botToken, chatID string) error
+}
 
 // SettingsHandler manages the configuration page and actions.
 type SettingsHandler struct {
-	repo         domain.SettingsRepository
-	alertService *monitor.AlertService
+	repo   domain.SettingsRepository
+	tester ConnectionTester
 }
 
-// NewSettingsHandler creates a handler for system settings.
-func NewSettingsHandler(r domain.SettingsRepository, a *monitor.AlertService) *SettingsHandler {
+// NewSettingsHandler creates a handler for system settings with an injected ConnectionTester.
+func NewSettingsHandler(r domain.SettingsRepository, t ConnectionTester) *SettingsHandler {
 	return &SettingsHandler{
-		repo:         r,
-		alertService: a,
+		repo:   r,
+		tester: t,
+	}
+}
+
+// parseSettingsForm extracts, sanitizes, and binds form parameters into a domain.Settings instance.
+func parseSettingsForm(r *http.Request) *domain.Settings {
+	port, _ := strconv.Atoi(r.FormValue("smtp_port"))
+	smtpUser := strings.TrimSpace(r.FormValue("smtp_user"))
+
+	adminEmail := strings.TrimSpace(r.FormValue("admin_email"))
+	if adminEmail == "" {
+		adminEmail = smtpUser
+	}
+
+	return &domain.Settings{
+		SMTPHost:         strings.TrimSpace(r.FormValue("smtp_host")),
+		SMTPPort:         port,
+		SMTPUser:         smtpUser,
+		SMTPPass:         r.FormValue("smtp_pass"),
+		SMTPFrom:         strings.TrimSpace(r.FormValue("smtp_from")),
+		AdminEmail:       adminEmail,
+		MqttAddress:      strings.TrimSpace(r.FormValue("mqtt_address")),
+		Enabled:          true,
+		TelegramBotToken: strings.TrimSpace(r.FormValue("telegram_bot_token")),
 	}
 }
 
@@ -57,6 +87,8 @@ func (h *SettingsHandler) ServePage(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles(
 		appdir.Path("web/templates/layout.html"),
 		appdir.Path("web/templates/settings.html"),
+		appdir.Path("web/templates/partials/settings_smtp.html"),
+		appdir.Path("web/templates/partials/settings_telegram.html"),
 	)
 	if err != nil {
 		log.Printf("[SETTINGS] Template error: %v", err)
@@ -69,7 +101,7 @@ func (h *SettingsHandler) ServePage(w http.ResponseWriter, r *http.Request) {
 		"Settings": settings,
 	}
 
-	tmpl.Execute(w, data)
+	_ = tmpl.Execute(w, data)
 }
 
 // HandleSave processes the form submission to update settings.
@@ -79,36 +111,7 @@ func (h *SettingsHandler) HandleSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse numeric fields
-	port, _ := strconv.Atoi(r.FormValue("smtp_port"))
-
-	// In the simplified UI, we might not have a checkbox for 'enabled',
-	// so we assume true if configuring, or handle logic as needed.
-	// For now, we assume if user saves credentials, they want it enabled.
-	enabled := true
-
-	smtpUser := r.FormValue("smtp_user")
-
-	// AUTO-BINDING:
-	// Since the UI doesn't have a separate "Admin Email" field, we assume
-	// the SMTP User (the account owner) is also the Admin who receives alerts.
-	adminEmail := r.FormValue("admin_email")
-	if adminEmail == "" {
-		adminEmail = smtpUser
-	}
-
-	// Construct domain object from form data
-	settings := &domain.Settings{
-		SMTPHost:         r.FormValue("smtp_host"),
-		SMTPPort:         port,
-		SMTPUser:         smtpUser,
-		SMTPPass:         r.FormValue("smtp_pass"),
-		SMTPFrom:         r.FormValue("smtp_from"),
-		AdminEmail:       adminEmail,
-		MqttAddress:      r.FormValue("mqtt_address"),
-		Enabled:          enabled,
-		TelegramBotToken: r.FormValue("telegram_bot_token"),
-	}
+	settings := parseSettingsForm(r)
 
 	// Persist to database
 	if err := h.repo.SaveSettings(settings); err != nil {
@@ -118,19 +121,16 @@ func (h *SettingsHandler) HandleSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("[SETTINGS] Configuration updated successfully.")
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
-// HandleTest sends a test email to the SMTP User themselves.
-// This validates the connection and proves the system can send emails.
+// HandleTest sends a test email to the SMTP User themselves to validate the connection.
 func (h *SettingsHandler) HandleTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// 1. Load Settings from Database
-	// The JS sends an empty body, so we rely on what's already saved.
 	settings, err := h.repo.GetSettings()
 	if err != nil {
 		log.Printf("[SETTINGS] Failed to load settings for test: %v", err)
@@ -138,31 +138,27 @@ func (h *SettingsHandler) HandleTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Validate Configuration
 	if settings.SMTPUser == "" {
 		http.Error(w, "No account configured. Please Connect Account first.", http.StatusBadRequest)
 		return
 	}
 
-	// 3. Set Target: Send to Self (Loopback Test)
 	targetEmail := settings.SMTPUser
-
 	log.Printf("[SETTINGS] Triggering self-test email to %s via %s:%d...",
 		targetEmail, settings.SMTPHost, settings.SMTPPort)
 
-	// 4. Execute Test
-	err = h.alertService.TestConnection(settings, targetEmail)
-	if err != nil {
-		log.Printf("[SETTINGS] Test failed: %v", err)
-		http.Error(w, "Test Failed: "+err.Error(), http.StatusInternalServerError)
-		return
+	if h.tester != nil {
+		if err := h.tester.TestConnection(settings, targetEmail); err != nil {
+			log.Printf("[SETTINGS] Test failed: %v", err)
+			http.Error(w, "Test Failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	w.Write([]byte("Test email sent to your inbox!"))
+	_, _ = w.Write([]byte("Test email sent to your inbox!"))
 }
 
-// HandleTestTelegram sends a test Telegram message to validate the bot token.
-// The caller must provide a chat_id in the POST body (used as the test destination).
+// HandleTestTelegram sends a test Telegram message to validate the bot token and chat ID.
 func (h *SettingsHandler) HandleTestTelegram(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -181,8 +177,7 @@ func (h *SettingsHandler) HandleTestTelegram(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// chat_id must be provided in the POST body.
-	chatID := r.FormValue("chat_id")
+	chatID := strings.TrimSpace(r.FormValue("chat_id"))
 	if chatID == "" {
 		http.Error(w, "Please provide a chat_id to send the test message.", http.StatusBadRequest)
 		return
@@ -190,11 +185,13 @@ func (h *SettingsHandler) HandleTestTelegram(w http.ResponseWriter, r *http.Requ
 
 	log.Printf("[SETTINGS] Sending Telegram test to chat_id %s...", chatID)
 
-	if err := h.alertService.TestTelegramConnection(settings.TelegramBotToken, chatID); err != nil {
-		log.Printf("[SETTINGS] Telegram test failed: %v", err)
-		http.Error(w, "Test Failed: "+err.Error(), http.StatusInternalServerError)
-		return
+	if h.tester != nil {
+		if err := h.tester.TestTelegramConnection(settings.TelegramBotToken, chatID); err != nil {
+			log.Printf("[SETTINGS] Telegram test failed: %v", err)
+			http.Error(w, "Test Failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	w.Write([]byte("Test message sent! Check your Telegram."))
+	_, _ = w.Write([]byte("Test message sent! Check your Telegram."))
 }

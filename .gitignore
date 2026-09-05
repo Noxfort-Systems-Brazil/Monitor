@@ -10,3 +10,16 @@ mosquitto/log/*
 !mosquitto/log/.gitkeep
 *.db
 *.log
+
+# Arquivos de Ambiente e Credenciais Locais (Privados)
+.env
+.env.*
+*.env
+!.env.example
+auth_config.json
+credentials.json
+*.local.json
+
+# Pacotes e artefatos de build
+*.deb
+build_deb/

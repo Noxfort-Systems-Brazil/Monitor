@@ -17,6 +17,7 @@
 // File: internal/monitor/engine.go
 // Author: Gabriel Moraes
 // Date: 2026-01-19
+// Modified: 2026-09-04 (SOLID Refactor)
 
 package monitor
 
@@ -29,37 +30,84 @@ import (
 	"noxfort-monitor-server/internal/domain"
 )
 
+// DeviceLister retrieves registered devices to evaluate their health.
+type DeviceLister interface {
+	GetAllDevices() ([]domain.Device, error)
+}
+
+// EventRecorder persists generated watchdog health events.
+type EventRecorder interface {
+	SaveEvent(identifier string, event *domain.IncomingEvent) error
+}
+
+// EngineConfig controls watchdog timing and timeouts.
+type EngineConfig struct {
+	CheckInterval    time.Duration
+	OfflineThreshold time.Duration
+}
+
+// DefaultEngineConfig provides standard production defaults (30s interval, 5m threshold).
+func DefaultEngineConfig() EngineConfig {
+	return EngineConfig{
+		CheckInterval:    30 * time.Second,
+		OfflineThreshold: 5 * time.Minute,
+	}
+}
+
 // Engine (Watchdog) is responsible for detecting silent failures.
 // It checks periodically if monitored systems have stopped sending signals.
 type Engine struct {
-	deviceRepo    domain.DeviceRepository
-	telemetryRepo domain.TelemetryRepository
-	alertService  *AlertService
-
-	// OfflineStatus tracks the state in memory to avoid spamming alerts.
-	// Map: Identifier (string) -> IsOffline (bool)
-	offlineStatus map[string]bool
-	mu            sync.RWMutex
+	devices   DeviceLister
+	events    EventRecorder
+	alerts    AlertDispatcher
+	auditRepo domain.AuditRepository
+	tracker   *SystemStatusTracker
+	config    EngineConfig
 
 	ticker   *time.Ticker
-	stopChan chan bool
+	stopChan chan struct{}
+	stopOnce sync.Once
 }
 
-// NewEngine creates the Watchdog worker.
-func NewEngine(dRepo domain.DeviceRepository, tRepo domain.TelemetryRepository, alerts *AlertService) *Engine {
+// SetAuditRepository attaches the audit repository for recording device availability transitions.
+func (e *Engine) SetAuditRepository(repo domain.AuditRepository) {
+	e.auditRepo = repo
+}
+
+// NewEngine creates the Watchdog worker with production default intervals.
+func NewEngine(devices DeviceLister, events EventRecorder, alerts AlertDispatcher) *Engine {
+	return NewEngineWithConfig(devices, events, alerts, DefaultEngineConfig())
+}
+
+// NewEngineWithConfig creates the Watchdog worker with custom timing configurations (useful for tests).
+func NewEngineWithConfig(
+	devices DeviceLister,
+	events EventRecorder,
+	alerts AlertDispatcher,
+	config EngineConfig,
+) *Engine {
+	if config.CheckInterval <= 0 {
+		config.CheckInterval = 30 * time.Second
+	}
+	if config.OfflineThreshold <= 0 {
+		config.OfflineThreshold = 5 * time.Minute
+	}
+
 	return &Engine{
-		deviceRepo:    dRepo,
-		telemetryRepo: tRepo,
-		alertService:  alerts,
-		offlineStatus: make(map[string]bool),
-		stopChan:      make(chan bool),
+		devices:  devices,
+		events:   events,
+		alerts:   alerts,
+		tracker:  NewSystemStatusTracker(),
+		config:   config,
+		stopChan: make(chan struct{}),
 	}
 }
 
 // Start begins the monitoring loop in a background goroutine.
 func (e *Engine) Start() {
-	e.ticker = time.NewTicker(30 * time.Second) // Check every 30s
-	e.stopChan = make(chan bool)
+	e.ticker = time.NewTicker(e.config.CheckInterval)
+	e.stopChan = make(chan struct{})
+	e.stopOnce = sync.Once{}
 
 	go func() {
 		log.Println("[ENGINE] Watchdog started. Monitoring system heartbeats...")
@@ -68,32 +116,37 @@ func (e *Engine) Start() {
 			case <-e.stopChan:
 				return
 			case <-e.ticker.C:
-				e.checkSystems()
+				e.CheckSystemsOnce()
 			}
 		}
 	}()
 }
 
-// Stop halts the monitoring loop.
+// Stop halts the monitoring loop. It is safe and idempotent to call multiple times.
 func (e *Engine) Stop() {
-	if e.ticker != nil {
-		e.ticker.Stop()
-	}
-	if e.stopChan != nil {
-		e.stopChan <- true
-	}
-	log.Println("[ENGINE] Watchdog stopped.")
+	e.stopOnce.Do(func() {
+		if e.ticker != nil {
+			e.ticker.Stop()
+		}
+		if e.stopChan != nil {
+			close(e.stopChan)
+		}
+		log.Println("[ENGINE] Watchdog stopped.")
+	})
 }
 
-// checkSystems iterates over all enabled systems to verify their LastSeen timestamp.
-func (e *Engine) checkSystems() {
-	devices, err := e.deviceRepo.GetAllDevices()
+// CheckSystemsOnce iterates over all enabled systems to verify their LastSeen timestamp.
+// Exposing this enables deterministic unit testing without artificial sleeps.
+func (e *Engine) CheckSystemsOnce() {
+	if e.devices == nil {
+		return
+	}
+
+	devices, err := e.devices.GetAllDevices()
 	if err != nil {
 		log.Printf("[ENGINE] Failed to query devices: %v", err)
 		return
 	}
-
-	threshold := 5 * time.Minute // TODO: Could be configurable per system
 
 	for _, dev := range devices {
 		if !dev.Enabled {
@@ -102,46 +155,59 @@ func (e *Engine) checkSystems() {
 
 		timeSince := time.Since(dev.LastSeen)
 
-		e.mu.Lock()
-		isKnownOffline := e.offlineStatus[dev.Identifier]
-
-		if timeSince > threshold {
-			// CASE 1: System is OFFLINE (Timeout)
-			if !isKnownOffline {
+		if timeSince > e.config.OfflineThreshold {
+			// CASE 1: System transitioned to OFFLINE
+			if e.tracker.MarkOffline(dev.Identifier) {
 				log.Printf("[ENGINE] System %s went OFFLINE (Last seen: %v)", dev.Identifier, timeSince)
-				e.offlineStatus[dev.Identifier] = true // Mark as offline
-
-				// Generate internal event
 				e.triggerEvent(dev.Identifier, domain.LevelCritical, fmt.Sprintf("System OFFLINE: No signal for %v.", timeSince.Round(time.Second)))
+				if e.auditRepo != nil {
+					_ = e.auditRepo.SaveDeviceStateTransition(&domain.DeviceStateTransition{
+						DeviceIdentifier:   dev.Identifier,
+						PreviousState:      "ONLINE",
+						NewState:           "OFFLINE",
+						DurationOfflineSec: 0,
+						TransitionAt:       time.Now(),
+					})
+				}
 			}
 		} else {
-			// CASE 2: System is ONLINE
-			if isKnownOffline {
+			// CASE 2: System recovered to ONLINE
+			if e.tracker.MarkOnline(dev.Identifier) {
 				log.Printf("[ENGINE] System %s recovered (ONLINE)", dev.Identifier)
-				delete(e.offlineStatus, dev.Identifier) // Remove from offline map
-
-				// Generate internal recovery event
 				e.triggerEvent(dev.Identifier, domain.LevelInfo, "System ONLINE: Signal recovered.")
+				if e.auditRepo != nil {
+					_ = e.auditRepo.SaveDeviceStateTransition(&domain.DeviceStateTransition{
+						DeviceIdentifier:   dev.Identifier,
+						PreviousState:      "OFFLINE",
+						NewState:           "ONLINE",
+						DurationOfflineSec: int64(timeSince.Seconds()),
+						TransitionAt:       time.Now(),
+					})
+				}
 			}
 		}
-		e.mu.Unlock()
 	}
 }
 
 // triggerEvent creates a synthetic event and injects it into the alert pipeline.
 func (e *Engine) triggerEvent(identifier string, level domain.EventLevel, msg string) {
 	event := &domain.IncomingEvent{
+		Category:   domain.CategoryHardware,
 		Origin:     "monitor-watchdog",
 		Level:      level,
 		Message:    msg,
 		OccurredAt: time.Now(),
 	}
 
-	// 1. Persist to DB
-	if err := e.telemetryRepo.SaveEvent(identifier, event); err != nil {
-		log.Printf("[ENGINE] Failed to save watchdog event: %v", err)
+	// 1. Persist to DB if event recorder is provided
+	if e.events != nil {
+		if err := e.events.SaveEvent(identifier, event); err != nil {
+			log.Printf("[ENGINE] Failed to save watchdog event: %v", err)
+		}
 	}
 
-	// 2. Alert Human
-	e.alertService.TriggerAlert(identifier, event)
+	// 2. Alert Human if dispatcher is provided
+	if e.alerts != nil {
+		e.alerts.TriggerAlert(identifier, event)
+	}
 }

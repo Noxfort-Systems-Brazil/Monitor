@@ -6,42 +6,57 @@
 // published by the Free Software Foundation, either version 3 of the
 // License, or (at your option) any later version.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-//
 // File: internal/storage/contact_repo.go
 // Author: Gabriel Moraes
 // Date: 2026-01-18
+// Modified: 2026-09-04 (PostgreSQL & Hot-Reload Support)
 
 package storage
 
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"noxfort-monitor-server/internal/domain"
 )
 
-// ContactRepositorySQLite implements domain.ContactRepository.
+// ContactRepositorySQLite implements domain.ContactRepository with multi-database support.
 type ContactRepositorySQLite struct {
-	db *sql.DB
+	mu     sync.RWMutex
+	db     *sql.DB
+	driver string
 }
 
 // NewContactRepository creates a new instance.
 func NewContactRepository(db *sql.DB) *ContactRepositorySQLite {
-	return &ContactRepositorySQLite{db: db}
+	return &ContactRepositorySQLite{db: db, driver: "sqlite"}
+}
+
+// SetDB updates the database connection and dialect at runtime.
+func (r *ContactRepositorySQLite) SetDB(db *sql.DB, driver string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.db = db
+	r.driver = driver
+}
+
+func (r *ContactRepositorySQLite) getDB() (*sql.DB, string) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.db, r.driver
 }
 
 // GetAllContacts returns all response team members.
 func (r *ContactRepositorySQLite) GetAllContacts() ([]domain.Contact, error) {
-	query := `SELECT id, name, email, phone, role, notify_critical, enabled, telegram_chat_id FROM contacts`
+	db, _ := r.getDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
 
-	rows, err := r.db.Query(query)
+	query := `SELECT id, name, email, phone, role, notify_critical, enabled, telegram_chat_id FROM contacts;`
+
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query contacts: %w", err)
 	}
@@ -71,22 +86,53 @@ func (r *ContactRepositorySQLite) GetAllContacts() ([]domain.Contact, error) {
 
 // CreateContact adds a new person to the team.
 func (r *ContactRepositorySQLite) CreateContact(c *domain.Contact) error {
-	query := `
-	INSERT INTO contacts (name, email, phone, role, notify_critical, enabled, telegram_chat_id)
-	VALUES (?, ?, ?, ?, ?, ?, ?)`
+	db, driver := r.getDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
 
-	_, err := r.db.Exec(query, c.Name, c.Email, c.Phone, c.Role, c.NotifyCritical, c.Enabled, c.TelegramChatID)
+	query := AdaptQuery(`
+		INSERT INTO contacts (name, email, phone, role, notify_critical, enabled, telegram_chat_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?);
+	`, driver)
+
+	_, err := db.Exec(query, c.Name, c.Email, c.Phone, c.Role, c.NotifyCritical, c.Enabled, c.TelegramChatID)
 	if err != nil {
 		return fmt.Errorf("failed to insert contact: %w", err)
 	}
 	return nil
 }
 
+// UpdateContact modifies an existing person on the team.
+func (r *ContactRepositorySQLite) UpdateContact(c *domain.Contact) error {
+	db, driver := r.getDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	query := AdaptQuery(`
+		UPDATE contacts
+		SET name = ?, email = ?, phone = ?, role = ?, notify_critical = ?, enabled = ?, telegram_chat_id = ?
+		WHERE id = ?;
+	`, driver)
+
+	_, err := db.Exec(query, c.Name, c.Email, c.Phone, c.Role, c.NotifyCritical, c.Enabled, c.TelegramChatID, c.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update contact: %w", err)
+	}
+	return nil
+}
+
 // DeleteContact removes a person by ID.
 func (r *ContactRepositorySQLite) DeleteContact(id int64) error {
-	query := `DELETE FROM contacts WHERE id = ?`
+	db, driver := r.getDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
 
-	_, err := r.db.Exec(query, id)
+	query := AdaptQuery(`DELETE FROM contacts WHERE id = ?;`, driver)
+
+	_, err := db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete contact: %w", err)
 	}

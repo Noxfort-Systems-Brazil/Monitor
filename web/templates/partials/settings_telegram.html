@@ -1,0 +1,88 @@
+{{ define "settings_telegram" }}
+{{/* ─── Telegram Bot Card ─── */}}
+<div class="mt-4">
+    <div id="feedback-alert-telegram" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+    {{ if .Settings.TelegramBotToken }}
+    <div id="telegram-connected-card" class="card bg-dark border-info shadow-lg text-center fade-in">
+        <div class="card-body p-5">
+            <div class="mb-4 position-relative d-inline-block">
+                <div class="rounded-circle bg-info bg-opacity-10 p-4 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px; margin: 0 auto;">
+                    <i class="fa-brands fa-telegram fa-3x text-info"></i>
+                </div>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-info text-dark border border-dark" data-i18n="common_active">Active</span>
+            </div>
+            <h3 class="text-white mb-1" data-i18n="settings_tg_connected">Telegram Bot Connected</h3>
+            <p class="text-muted mb-4" data-i18n="settings_tg_connected_sub">Alerts will be sent via Telegram to each contact's Chat ID.</p>
+            <div class="bg-black bg-opacity-50 rounded p-3 mb-4 border border-secondary d-inline-block w-100">
+                <div class="text-uppercase text-muted small fw-bold mb-1" data-i18n="settings_tg_token_label">Bot Token</div>
+                <div class="fs-6 text-info font-monospace text-break opacity-75">
+                    {{ printf "%.10s" .Settings.TelegramBotToken }}•••••••••
+                </div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="button" id="btn-test-telegram" class="btn btn-outline-info">
+                    <i class="fa-brands fa-telegram me-2"></i> <span data-i18n="settings_tg_test_btn">Send Test Message</span>
+                </button>
+                <button type="button" id="btn-change-telegram" class="btn btn-outline-secondary btn-sm mt-2">
+                    <i class="fa-solid fa-right-from-bracket me-2"></i> <span data-i18n="settings_tg_disconnect">Disconnect / Change Bot</span>
+                </button>
+            </div>
+        </div>
+        <div class="card-footer bg-info bg-opacity-10 border-info text-info small">
+            <i class="fa-solid fa-shield-halved me-2"></i> <span data-i18n="settings_tg_secure">Bot Token Configured</span>
+        </div>
+    </div>
+    {{ end }}
+
+    <div id="telegram-setup-card" class="{{ if .Settings.TelegramBotToken }}d-none{{ end }}">
+        <div class="card bg-dark border-secondary text-light shadow-lg">
+            <div class="card-header border-secondary bg-black bg-opacity-25 text-center py-3">
+                <h5 class="mb-0"><i class="fa-brands fa-telegram me-2 text-info"></i><span data-i18n="settings_tg_header">Connect Telegram Bot</span></h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert bg-dark border-info text-info-emphasis small p-3 mb-4" style="border-left: 3px solid var(--bs-info) !important; background: rgba(13,202,240,0.05) !important;">
+                    <strong class="d-block mb-1"><i class="fa-solid fa-circle-info me-1"></i> <span data-i18n="settings_tg_how_to">How to get a Bot Token</span></strong>
+                    <ol class="mb-0 ps-3">
+                        <li data-i18n="settings_tg_step1">Open Telegram and search for @BotFather</li>
+                        <li data-i18n="settings_tg_step2">Send /newbot and follow the prompts</li>
+                        <li data-i18n="settings_tg_step3">Copy the token and paste below</li>
+                    </ol>
+                </div>
+
+                <form action="/settings/save" method="POST" id="telegramForm">
+                    <input type="hidden" name="mqtt_address"  value="{{ .Settings.MqttAddress }}">
+                    <input type="hidden" name="smtp_host"     value="{{ .Settings.SMTPHost }}">
+                    <input type="hidden" name="smtp_port"     value="{{ .Settings.SMTPPort }}">
+                    <input type="hidden" name="smtp_user"     value="{{ .Settings.SMTPUser }}">
+                    <input type="hidden" name="smtp_pass"     value="{{ .Settings.SMTPPass }}">
+                    <input type="hidden" name="smtp_from"     value="{{ .Settings.SMTPFrom }}">
+                    <input type="hidden" name="admin_email"   value="{{ .Settings.AdminEmail }}">
+                    <input type="hidden" name="enabled"       value="{{ .Settings.Enabled }}">
+
+                    <div class="form-floating mb-4">
+                        <input type="text" class="form-control bg-black text-white border-secondary"
+                               id="telegram_bot_token" name="telegram_bot_token"
+                               placeholder="123456:ABC-DEF..."
+                               value="{{ .Settings.TelegramBotToken }}" required>
+                        <label for="telegram_bot_token" class="text-muted">
+                            <i class="fa-solid fa-key me-1"></i> <span data-i18n="settings_tg_token_label">Bot Token</span>
+                        </label>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-info text-dark fw-bold py-2">
+                            <i class="fa-brands fa-telegram me-2"></i> <span data-i18n="settings_tg_connect_btn">Connect Bot</span>
+                        </button>
+                        {{ if .Settings.TelegramBotToken }}
+                        <button type="button" id="btn-cancel-telegram" class="btn btn-link text-muted mt-2 text-decoration-none small">
+                            <span data-i18n="settings_tg_cancel">Cancel</span>
+                        </button>
+                        {{ end }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}

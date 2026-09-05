@@ -1,8 +1,22 @@
 // Noxfort Monitor™ is an open-source industrial telemetry, observability, and incident response orchestration system.
 // Copyright (C) 2026 Gabriel Moraes - Noxfort Systems
 //
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+//
 // File: web/static/js/settings.js
 // Author: Gabriel Moraes
+// Date: 2026-09-04
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -127,6 +141,63 @@ document.addEventListener('DOMContentLoaded', function () {
                     btnTest.disabled = false;
                     btnTest.innerHTML = originalHTML;
                 });
+        });
+    }
+
+    // --- 4. Telegram Bot Configuration ---
+    const btnChangeTelegram = document.getElementById('btn-change-telegram');
+    const btnCancelTelegram = document.getElementById('btn-cancel-telegram');
+    const telegramConnected = document.getElementById('telegram-connected-card');
+    const telegramSetup     = document.getElementById('telegram-setup-card');
+    const telegramFeedback  = document.getElementById('feedback-alert-telegram');
+    const btnTestTelegram   = document.getElementById('btn-test-telegram');
+
+    function showTelegramAlert(msg, type) {
+        if (!telegramFeedback) return;
+        telegramFeedback.className = 'alert alert-' + type + ' shadow-sm mb-4';
+        telegramFeedback.textContent = msg;
+        telegramFeedback.classList.remove('d-none');
+        setTimeout(() => telegramFeedback.classList.add('d-none'), 6000);
+    }
+
+    if (btnChangeTelegram) {
+        btnChangeTelegram.addEventListener('click', () => {
+            telegramConnected?.classList.add('d-none');
+            telegramSetup?.classList.remove('d-none');
+        });
+    }
+
+    if (btnCancelTelegram) {
+        btnCancelTelegram.addEventListener('click', () => {
+            telegramSetup?.classList.add('d-none');
+            telegramConnected?.classList.remove('d-none');
+        });
+    }
+
+    if (btnTestTelegram) {
+        btnTestTelegram.addEventListener('click', async () => {
+            const chatID = prompt('Enter your Telegram Chat ID to receive the test message:\n(Message @userinfobot on Telegram to get yours)');
+            if (!chatID || !chatID.trim()) return;
+
+            btnTestTelegram.disabled = true;
+            btnTestTelegram.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Sending...';
+
+            try {
+                const fd = new FormData();
+                fd.append('chat_id', chatID.trim());
+                const res = await fetch('/settings/test-telegram', { method: 'POST', body: fd });
+                const text = await res.text();
+                if (res.ok) {
+                    showTelegramAlert('✅ ' + text, 'success');
+                } else {
+                    showTelegramAlert('❌ ' + text, 'danger');
+                }
+            } catch (e) {
+                showTelegramAlert('❌ Network error: ' + e.message, 'danger');
+            } finally {
+                btnTestTelegram.disabled = false;
+                btnTestTelegram.innerHTML = '<i class="fa-brands fa-telegram me-2"></i>Send Test Message';
+            }
         });
     }
 });

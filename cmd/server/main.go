@@ -21,25 +21,68 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"flag"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"sync"
+	"syscall"
+	"time"
 
 	// Internal Packages
+	"noxfort-monitor-server/internal/desktop"
 	"noxfort-monitor-server/internal/monitor"
+	"noxfort-monitor-server/internal/security"
 	"noxfort-monitor-server/internal/storage"
 	transportHttp "noxfort-monitor-server/internal/transport/http"
 	transportMqtt "noxfort-monitor-server/internal/transport/mqtt"
-	"noxfort-monitor-server/internal/tray"
+	"noxfort-monitor-server/internal/tunnel"
 )
 
 func main() {
-	// 1. Initialize Logger
-	log.Println("[BOOT] Starting Noxfort Monitor Server v2.0 (Event-Driven)...")
+	headless := flag.Bool("headless", false, "Run in headless mode without GUI desktop window")
+	flag.BoolVar(headless, "server-only", false, "Alias for --headless")
+	flag.Parse()
 
-	// 2. Database Connection
-	// The database lives in ~/Documentos/Monitor/ to separate user data from
-	// the application source code (XDG best-practice for Linux desktop apps).
+	// 0. Single Instance Lock (Enforce only one monitor open at a time)
+	if !*headless {
+		if desktop.TryActivateExisting() {
+			log.Println("[BOOT] Uma instância do Noxfort Monitor já está em execução. Janela existente trazida para o primeiro plano.")
+			os.Exit(0)
+		}
+	}
+
+	// 1. Initialize Logger
+	log.Println("[BOOT] Starting Noxfort Monitor v2.0 (Event-Driven)...")
+
+	// 1.1 Single Instance IPC Server
+	var singleInstanceServer io.Closer
+	var appRef *desktop.App
+	var appRefMu sync.Mutex
+
+	if !*headless {
+		srv, err := desktop.StartSingleInstanceServer(func() {
+			appRefMu.Lock()
+			app := appRef
+			appRefMu.Unlock()
+			if app != nil {
+				app.RestoreWindow()
+			}
+		})
+		if err == nil {
+			singleInstanceServer = srv
+		} else {
+			log.Printf("[WARN] Single instance socket listener could not be started: %v", err)
+		}
+	}
+
+	// 2. Database Connection (PostgreSQL with auto-schema or SQLite fallback)
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("[FATAL] Could not resolve home directory: %v", err)
@@ -50,26 +93,83 @@ func main() {
 	}
 	dbPath := filepath.Join(dataDir, "monitor_logs.db")
 	log.Printf("[BOOT] Data directory: %s", dataDir)
-	db, err := storage.NewDatabase(dbPath)
-	if err != nil {
-		log.Fatalf("[FATAL] Failed to initialize database: %v", err)
+
+	dbConfig := storage.LoadDatabaseConfig()
+	if dbConfig.FilePath == "" {
+		dbConfig.FilePath = dbPath
 	}
-	defer db.Close()
-	log.Println("[INFO] Database connected (Pure Go Driver).")
+
+	var db *sql.DB
+	var activeDriver string
+
+	if dbConfig.Type == "postgres" {
+		log.Printf("[BOOT] Connecting to PostgreSQL at %s:%d (Database: %s, Schema: %s)...",
+			dbConfig.Host, dbConfig.Port, dbConfig.DBName, dbConfig.Schema)
+		pgDB, drv, pgErr := storage.OpenConnection(dbConfig)
+		if pgErr == nil {
+			if initErr := storage.InitPostgresSchema(pgDB, dbConfig.Schema); initErr == nil {
+				db = pgDB
+				activeDriver = drv
+				log.Printf("[INFO] PostgreSQL connected successfully (Schema: '%s').", dbConfig.Schema)
+			} else {
+				log.Printf("[WARN] PostgreSQL connected but failed to initialize schema '%s': %v. Falling back to SQLite.", dbConfig.Schema, initErr)
+				_ = pgDB.Close()
+			}
+		} else {
+			log.Printf("[WARN] Failed to connect to PostgreSQL (%v). Falling back to local SQLite.", pgErr)
+		}
+	}
+
+	// Fallback to SQLite if PostgreSQL was not chosen or failed
+	if db == nil {
+		sqliteDB, err := storage.NewDatabase(dbPath)
+		if err != nil {
+			log.Fatalf("[FATAL] Failed to initialize local SQLite database: %v", err)
+		}
+		db = sqliteDB
+		activeDriver = "sqlite"
+		dbConfig.Type = "sqlite"
+		log.Println("[INFO] SQLite connected (Pure Go Driver).")
+	}
+
+	// 2.1 Central DB Manager (supports live hot-reload from Web/Desktop UI)
+	dbManager := storage.NewDBManager(db, activeDriver, dbConfig)
 
 	// 3. Initialize Repositories
 	deviceRepo := storage.NewDeviceRepository(db)
 	contactRepo := storage.NewContactRepository(db)
 	settingsRepo := storage.NewSettingsRepository(db)
 	telemetryRepo := storage.NewTelemetryRepository(db)
+	userRepo := storage.NewUserRepository(db)
+	auditRepo := storage.NewAuditRepository(db, activeDriver)
 
-	// 4. Initialize Core Services
-	alertService := monitor.NewAlertService(contactRepo, settingsRepo)
+	// Register repositories for live database hot-reloading
+	dbManager.RegisterRepository(deviceRepo)
+	dbManager.RegisterRepository(contactRepo)
+	dbManager.RegisterRepository(settingsRepo)
+	dbManager.RegisterRepository(telemetryRepo)
+	dbManager.RegisterRepository(userRepo)
+	dbManager.RegisterRepository(auditRepo)
+
+	// 4. Initialize Core & Security Services
+	emailChan := monitor.NewEmailChannel()
+	telegramChan := monitor.NewTelegramChannel()
+	channelTester := monitor.NewChannelTester(emailChan, telegramChan)
+
+	alertService := monitor.NewAlertService(contactRepo, settingsRepo, emailChan, telegramChan)
+	alertService.SetAuditRepository(auditRepo)
+
 	stateManager := monitor.NewStateManager(telemetryRepo, deviceRepo, alertService)
+	secManager := security.NewSecurityManager(userRepo)
+	secManager.SetAuditRepository(auditRepo)
+
+	if err := secManager.EnsureSuperuser(); err != nil {
+		log.Fatalf("[FATAL] Failed to initialize superuser: %v", err)
+	}
 
 	engine := monitor.NewEngine(deviceRepo, telemetryRepo, alertService)
+	engine.SetAuditRepository(auditRepo)
 	engine.Start()
-	defer engine.Stop()
 
 	// 5. Initialize & Start MQTT Client
 	settings, err := settingsRepo.GetSettings()
@@ -85,14 +185,23 @@ func main() {
 	if err := mqttClient.Connect(); err != nil {
 		log.Fatalf("[FATAL] Could not connect to MQTT Broker: %v", err)
 	}
-	defer mqttClient.Disconnect()
 	log.Println("[INFO] MQTT Listener Active (Listening for JSON events).")
 
-	// 6. Initialize HTTP Server
+	// 6. Initialize HTTP Server & Tunnel Manager (Ngrok)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+
+	tunnelDriver := tunnel.NewNgrokDriver()
+	tunnelManager := tunnel.NewManager(tunnelDriver, port)
+	if settings.NgrokAuthToken != "" {
+		log.Printf("[BOOT] Auto-starting Ngrok Tunnel on domain '%s'...", settings.NgrokDomain)
+		if err := tunnelManager.Start(settings.NgrokAuthToken, settings.NgrokDomain); err != nil {
+			log.Printf("[WARN] Failed to auto-start Ngrok tunnel on boot: %v", err)
+		}
+	}
+
 	httpServer := transportHttp.NewServer(
 		":"+port,
 		deviceRepo,
@@ -100,27 +209,70 @@ func main() {
 		contactRepo,
 		settingsRepo,
 		stateManager,
-		alertService,
+		channelTester,
+		secManager,
+		tunnelManager,
+		dbManager,
+		auditRepo,
 	)
 
-	// 7. Run HTTP server in a background goroutine so the main goroutine
-	//    remains available for the system tray (required by Linux/GTK).
+	localIP := transportHttp.GetLocalIP()
+	serverURL := fmt.Sprintf("http://%s:%s", localIP, port)
+
+	// Run HTTP server in background for external IoT ingestion (/api/telemetry)
+	// and Wails native webview
 	go func() {
-		log.Printf("[INFO] Web Interface running at http://localhost:%s", port)
-		log.Println("[INFO] Ready.")
-		if err := httpServer.Run(); err != nil {
+		log.Printf("[INFO] Local REST & Telemetry Server running at %s (Local: http://localhost:%s)", serverURL, port)
+		if err := httpServer.Run(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[FATAL] Web Server failed: %v", err)
 		}
 	}()
 
-	// 8. System Tray — blocks the main goroutine until the user exits.
-	//    On exit: cleanly shut everything down.
-	log.Println("[TRAY] Starting system tray icon...")
-	tray.Start(port, func() {
-		log.Println("[TRAY] Shutting down...")
-		engine.Stop()
-		mqttClient.Disconnect()
-		db.Close()
+	// 7. Graceful Shutdown Coordinator (guaranteed to execute at most once)
+	var shutdownOnce sync.Once
+	shutdown := func() {
+		shutdownOnce.Do(func() {
+			log.Println("[SHUTDOWN] Stopping Noxfort Monitor...")
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if singleInstanceServer != nil {
+				_ = singleInstanceServer.Close()
+			}
+			if err := tunnelManager.Stop(); err != nil {
+				log.Printf("[WARN] Tunnel shutdown error: %v", err)
+			}
+			if err := httpServer.Stop(shutdownCtx); err != nil {
+				log.Printf("[WARN] HTTP Server shutdown error: %v", err)
+			}
+			engine.Stop()
+			mqttClient.Disconnect()
+			if activeDB := dbManager.GetDB(); activeDB != nil {
+				_ = activeDB.Close()
+			}
+			log.Println("[SHUTDOWN] All services stopped cleanly.")
+		})
+	}
+	defer shutdown()
+
+	// 8. Run in Headless or Desktop Mode
+	if *headless {
+		log.Println("[BOOT] Running in HEADLESS mode (no GUI window). Press Ctrl+C to stop.")
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+		<-sigCh
+		shutdown()
 		os.Exit(0)
-	})
+	} else {
+		log.Println("[BOOT] Starting Noxfort Monitor Desktop GUI (Wails v2)...")
+		desktopApp := desktop.New(httpServer.Handler(), shutdown)
+		appRefMu.Lock()
+		appRef = desktopApp
+		appRefMu.Unlock()
+
+		if err := desktopApp.Run(); err != nil {
+			log.Fatalf("[FATAL] Desktop application failed: %v", err)
+		}
+		shutdown()
+		os.Exit(0)
+	}
 }

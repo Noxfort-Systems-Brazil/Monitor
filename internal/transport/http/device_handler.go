@@ -24,21 +24,24 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"noxfort-monitor-server/internal/appdir"
 
 	"noxfort-monitor-server/internal/domain"
+	"noxfort-monitor-server/internal/tunnel"
 )
 
 // DeviceHandler manages the CRUD operations for monitored systems.
 type DeviceHandler struct {
-	deviceRepo domain.DeviceRepository
+	deviceRepo    domain.DeviceRepository
+	tunnelService tunnel.Service
 }
 
-// NewDeviceHandler initializes the handler.
-// Refactored: Removed unused SettingsRepository dependency.
-func NewDeviceHandler(dRepo domain.DeviceRepository) *DeviceHandler {
+// NewDeviceHandler initializes the handler with repository and tunnel service dependencies.
+func NewDeviceHandler(dRepo domain.DeviceRepository, ts tunnel.Service) *DeviceHandler {
 	return &DeviceHandler{
-		deviceRepo: dRepo,
+		deviceRepo:    dRepo,
+		tunnelService: ts,
 	}
 }
 
@@ -62,9 +65,25 @@ func (h *DeviceHandler) ServePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Prefer the unified Ngrok Telemetry URL
+	pushTarget := GetLocalIP()
+	if h.tunnelService != nil {
+		status := h.tunnelService.GetStatus()
+		if status.TelemetryURL != "" {
+			pushTarget = status.TelemetryURL
+		}
+	}
+
 	data := map[string]interface{}{
-		"Title":   "System Management",
-		"Devices": devices, // Passes the []domain.Device list directly
+		"Title":      "System Management",
+		"Devices":    devices, // Passes the []domain.Device list directly
+		"ServerIP":   pushTarget,
+		"ServerPort": port,
 	}
 
 	tmpl.Execute(w, data)
@@ -88,5 +107,5 @@ func (h *DeviceHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Refresh the list
-	http.Redirect(w, r, "/devices", http.StatusSeeOther)
+	Redirect(w, r, "/devices", http.StatusSeeOther)
 }

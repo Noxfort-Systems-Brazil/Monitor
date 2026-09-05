@@ -17,37 +17,57 @@
 // File: internal/monitor/alerts.go
 // Author: Gabriel Moraes
 // Date: 2026-01-19
+// Modified: 2026-09-04 (SOLID Refactor)
 
 package monitor
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"log"
-	"net/http"
-	"net/smtp"
-	"strings"
 
 	"noxfort-monitor-server/internal/domain"
 )
 
-// AlertService manages the dispatch of notifications based on roles and categories.
+// AlertService orchestrates the retrieval of settings/contacts and dispatches alerts via configured channels.
 type AlertService struct {
 	contactRepo  domain.ContactRepository
 	settingsRepo domain.SettingsRepository
+	auditRepo    domain.AuditRepository
+	channels     []NotificationChannel
 }
 
-// NewAlertService creates a new instance of the AlertService.
-func NewAlertService(cRepo domain.ContactRepository, sRepo domain.SettingsRepository) *AlertService {
+// SetAuditRepository attaches the audit repository for recording notification delivery logs.
+func (s *AlertService) SetAuditRepository(repo domain.AuditRepository) {
+	s.auditRepo = repo
+}
+
+// NewAlertService creates a new instance of the AlertService with default or injected channels.
+func NewAlertService(cRepo domain.ContactRepository, sRepo domain.SettingsRepository, channels ...NotificationChannel) *AlertService {
+	if len(channels) == 0 {
+		channels = []NotificationChannel{NewEmailChannel(), NewTelegramChannel()}
+	}
+
 	return &AlertService{
 		contactRepo:  cRepo,
 		settingsRepo: sRepo,
+		channels:     channels,
 	}
 }
 
-// TriggerAlert processes an incoming event and dispatches notifications if necessary.
+// NewAlertServiceWithChannels creates an AlertService with custom channels (useful for testing or extensions).
+func NewAlertServiceWithChannels(
+	cRepo domain.ContactRepository,
+	sRepo domain.SettingsRepository,
+	channels ...NotificationChannel,
+) *AlertService {
+	return NewAlertService(cRepo, sRepo, channels...)
+}
+
+// TriggerAlert processes an incoming event, evaluates routing rules, and dispatches to eligible contacts.
 func (s *AlertService) TriggerAlert(identifier string, event *domain.IncomingEvent) {
+	if event == nil {
+		return
+	}
+
 	// 1. Fetch Global Settings
 	settings, err := s.settingsRepo.GetSettings()
 	if err != nil {
@@ -62,194 +82,43 @@ func (s *AlertService) TriggerAlert(identifier string, event *domain.IncomingEve
 		return
 	}
 
-	// 3. Compose the messages
-	subject := fmt.Sprintf("[%s] %s - %s: %s", event.Level, event.Category, identifier, event.Message)
-	emailBody := s.buildEmailBody(identifier, event)
-	telegramMsg := s.buildTelegramMessage(identifier, event)
-
-	// 4. Smart Routing Dispatch
+	// 3. Smart Routing & Channel Dispatch
 	sentCount := 0
 	for _, contact := range contacts {
-		if !contact.Enabled {
+		target := contact
+		if !IsEligible(&target, event) {
 			continue
 		}
 
-		// Regra Global: Nunca enviar alertas para nível INFO.
-		if event.Level == domain.LevelInfo {
-			continue
-		}
-
-		// A. Check Severity Preference
-		if contact.NotifyCritical && event.Level != domain.LevelCritical {
-			continue
-		}
-
-		// B. Check Role vs Category Compatibility
-		if !s.shouldNotify(contact.Role, event.Category) {
-			continue
-		}
-
-		// C. Send Email (if SMTP is configured)
-		if settings.Enabled && contact.Email != "" {
-			go func(email string) {
-				if err := s.sendEmail(settings, email, subject, emailBody); err != nil {
-					log.Printf("[ALERTS] Failed to send email to %s: %v", email, err)
+		for _, ch := range s.channels {
+			go func(channel NotificationChannel, c domain.Contact) {
+				status := "SENT"
+				errReason := ""
+				if err := channel.Send(settings, &c, identifier, event); err != nil {
+					status = "FAILED"
+					errReason = err.Error()
+					log.Printf("[ALERTS] Failed to send alert via %s to contact '%s': %v",
+						channel.Name(), c.Name, err)
 				}
-			}(contact.Email)
-		}
 
-		// D. Send Telegram (if bot token + contact chat ID are configured)
-		if settings.TelegramBotToken != "" && contact.TelegramChatID != "" {
-			go func(chatID string) {
-				if err := s.sendTelegram(settings.TelegramBotToken, chatID, telegramMsg); err != nil {
-					log.Printf("[ALERTS] Failed to send Telegram to %s: %v", chatID, err)
+				if s.auditRepo != nil {
+					recipient := channel.Recipient(&c)
+					_ = s.auditRepo.SaveAlertDispatchLog(&domain.AlertDispatchLog{
+						Channel:      channel.Name(),
+						Recipient:    recipient,
+						Role:         c.Role,
+						Status:       status,
+						ErrorReason:  errReason,
+						DispatchedAt: event.OccurredAt,
+					})
 				}
-			}(contact.TelegramChatID)
+			}(ch, target)
 		}
-
 		sentCount++
 	}
 
 	if sentCount > 0 {
-		log.Printf("[ALERTS] Dispatching incident '%s' to %d recipients.", event.Message, sentCount)
+		log.Printf("[ALERTS] Dispatching incident '%s' to %d eligible recipients across %d channels.",
+			event.Message, sentCount, len(s.channels))
 	}
-}
-
-// shouldNotify determines if a specific Role should receive a specific Category of alert.
-func (s *AlertService) shouldNotify(role string, category domain.EventCategory) bool {
-	role = strings.ToLower(role)
-
-	// 1. System Admin (Receives EVERYTHING)
-	if role == "system_admin" || role == "admin" || role == "system admin" {
-		return true
-	}
-
-	// 2. Technician (Receives only HARDWARE)
-	if role == "technician" && category == domain.CategoryHardware {
-		return true
-	}
-
-	// 3. Programmer (Receives only SOFTWARE)
-	if role == "programmer" && category == domain.CategorySoftware {
-		return true
-	}
-
-	return false
-}
-
-// TestConnection attempts to send a test email.
-func (s *AlertService) TestConnection(settings *domain.Settings, to string) error {
-	subject := "Noxfort Monitor: Test Connection"
-	body := "This is a test email to verify your SMTP configuration."
-	return s.sendEmail(settings, to, subject, body)
-}
-
-// TestTelegramConnection sends a test message to validate the bot token and a given chat ID.
-func (s *AlertService) TestTelegramConnection(botToken, chatID string) error {
-	msg := "✅ *Noxfort Monitor*\n\nTelegram bot configured successfully\\! Test message received\\."
-	return s.sendTelegram(botToken, chatID, msg)
-}
-
-// buildEmailBody formats the alert email body.
-func (s *AlertService) buildEmailBody(identifier string, event *domain.IncomingEvent) string {
-	return fmt.Sprintf(
-		"NOXFORT MONITOR - RELATÓRIO DE INCIDENTE\n"+
-			"--------------------------------------------------\n"+
-			"Categoria:    %s\n"+
-			"Sistema:      %s\n"+
-			"Gravidade:    %s\n"+
-			"Data/Hora:    %s\n"+
-			"--------------------------------------------------\n"+
-			"\n"+
-			"MENSAGEM:\n"+
-			"%s\n",
-		event.Category,
-		identifier,
-		event.Level,
-		event.OccurredAt.Format("02/01/2006 15:04:05"),
-		event.Message,
-	)
-}
-
-// buildTelegramMessage formats the alert as a Telegram MarkdownV2 message.
-func (s *AlertService) buildTelegramMessage(identifier string, event *domain.IncomingEvent) string {
-	levelEmoji := map[string]string{
-		string(domain.LevelCritical): "🔴",
-		string(domain.LevelWarning):  "🟡",
-		string(domain.LevelInfo):     "🟢",
-	}
-	emoji := levelEmoji[string(event.Level)]
-	if emoji == "" {
-		emoji = "⚪"
-	}
-
-	// Escape special chars for MarkdownV2
-	esc := func(s string) string {
-		replacer := strings.NewReplacer(
-			"_", "\\_", "*", "\\*", "[", "\\[", "]", "\\]",
-			"(", "\\(", ")", "\\)", "~", "\\~", "`", "\\`",
-			">", "\\>", "#", "\\#", "+", "\\+", "-", "\\-",
-			"=", "\\=", "|", "\\|", "{", "\\{", "}", "\\}",
-			".", "\\.", "!", "\\!",
-		)
-		return replacer.Replace(s)
-	}
-
-	return fmt.Sprintf(
-		"%s *\\[%s\\] Noxfort Monitor Alert*\n\n"+
-			"*Sistema:* `%s`\n"+
-			"*Categoria:* %s\n"+
-			"*Mensagem:* %s\n"+
-			"*Data/Hora:* %s",
-		emoji,
-		esc(string(event.Level)),
-		esc(identifier),
-		esc(string(event.Category)),
-		esc(event.Message),
-		esc(event.OccurredAt.Format("02/01/2006 15:04:05")),
-	)
-}
-
-// sendTelegram dispatches a message via the Telegram Bot API.
-func (s *AlertService) sendTelegram(botToken, chatID, text string) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
-
-	payload := map[string]string{
-		"chat_id":    chatID,
-		"text":       text,
-		"parse_mode": "MarkdownV2",
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal telegram payload: %w", err)
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("telegram API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var result map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&result)
-		return fmt.Errorf("telegram API returned %d: %v", resp.StatusCode, result)
-	}
-
-	return nil
-}
-
-// sendEmail performs the actual SMTP transmission.
-func (s *AlertService) sendEmail(settings *domain.Settings, to, subject, body string) error {
-	auth := smtp.PlainAuth("", settings.SMTPUser, settings.SMTPPass, settings.SMTPHost)
-
-	msg := []byte(fmt.Sprintf("To: %s\r\n"+
-		"From: %s\r\n"+
-		"Subject: %s\r\n"+
-		"\r\n"+
-		"%s\r\n", to, settings.SMTPFrom, subject, body))
-
-	addr := fmt.Sprintf("%s:%d", settings.SMTPHost, settings.SMTPPort)
-	return smtp.SendMail(addr, auth, settings.SMTPFrom, []string{to}, msg)
 }

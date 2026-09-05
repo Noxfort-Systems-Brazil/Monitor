@@ -182,9 +182,24 @@ class I18nManager {
     }
 
     updateDropdownLabel() {
+        const langMap = {
+            'en': { code: 'us', label: 'EN' },
+            'pt': { code: 'br', label: 'PT' },
+            'es': { code: 'es', label: 'ES' },
+            'fr': { code: 'fr', label: 'FR' },
+            'ru': { code: 'ru', label: 'RU' },
+            'zh': { code: 'cn', label: 'ZH' }
+        };
+        const meta = langMap[this.currentLang] || { code: 'br', label: this.currentLang.toUpperCase() };
+
         const label = document.getElementById('current-lang-label');
         if (label) {
-            label.textContent = this.currentLang.toUpperCase();
+            label.textContent = meta.label;
+        }
+        const flag = document.getElementById('current-lang-flag');
+        if (flag) {
+            flag.className = `fi fi-${meta.code} me-2`;
+            flag.textContent = '';
         }
     }
 }

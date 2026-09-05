@@ -1,0 +1,172 @@
+{{ define "content" }}
+{{/*
+Noxfort Monitor™ is an open-source industrial telemetry, observability, and incident response orchestration system.
+Copyright (C) 2026 Gabriel Moraes - Noxfort Systems
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+File: web/templates/remote.html
+Author: Gabriel Moraes
+Date: 2026-09-04
+Modified: 2026-09-04 (Interface Simplificada e Unificada via Ngrok)
+*/}}
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4 border-bottom border-secondary">
+    <h1 class="h2 text-info">
+        <i class="fa-solid fa-earth-americas me-2"></i>
+        <span data-i18n="remote_title">Acesso Remoto &amp; Telemetria (Ngrok)</span>
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-refresh-status" title="Atualizar Status">
+            <i class="fa-solid fa-arrows-rotate me-1"></i> <span data-i18n="common_refresh">Atualizar</span>
+        </button>
+    </div>
+</div>
+
+<div id="remote-feedback" class="alert d-none shadow-sm mb-4" role="alert"></div>
+
+{{ if not .BinaryFound }}
+<div class="alert alert-warning border-warning shadow-sm mb-4">
+    <div class="d-flex">
+        <i class="fa-solid fa-triangle-exclamation fs-3 me-3 mt-1 text-warning"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1" data-i18n="remote_bin_missing_title">Executável do Ngrok não detectado</h5>
+            <p class="mb-2 small" data-i18n="remote_bin_missing_desc">
+                Para que o Noxfort Monitor gerencie o túnel em segundo plano com domínio fixo, instale o cliente do Ngrok no seu sistema operacional:
+            </p>
+            <div class="bg-black bg-opacity-50 p-2 rounded font-monospace small mb-2 border border-secondary">
+                <code>sudo snap install ngrok</code> &nbsp;<span class="text-muted">ou</span>&nbsp; <code>sudo apt install ngrok</code>
+            </div>
+            <a href="https://ngrok.com/download" target="_blank" class="btn btn-sm btn-outline-warning fw-bold">
+                <i class="fa-solid fa-external-link-alt me-1"></i> <span data-i18n="remote_btn_download_ngrok">Download Oficial Ngrok</span>
+            </a>
+        </div>
+    </div>
+</div>
+{{ end }}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+        <div class="card bg-dark border-secondary shadow-lg">
+            {{/* ─── Cabeçalho do Card: Título & Badge de Status ─── */}}
+            <div class="card-header border-secondary bg-black bg-opacity-25 d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0 text-white">
+                    <i class="fa-solid fa-earth-americas me-2 text-info"></i>
+                    <span data-i18n="remote_card_status">Acesso Remoto &amp; Telemetria (Ngrok)</span>
+                </h5>
+                <span id="badge-tunnel-state" class="badge rounded-pill px-3 py-2 fs-6
+                    {{ if eq .Status.State "ONLINE" }}bg-success{{ else if eq .Status.State "CONNECTING" }}bg-warning text-dark{{ else if eq .Status.State "ERROR" }}bg-danger{{ else }}bg-secondary{{ end }}">
+                    <i class="fa-solid {{ if eq .Status.State "ONLINE" }}fa-circle-check{{ else if eq .Status.State "CONNECTING" }}fa-spinner fa-spin{{ else if eq .Status.State "ERROR" }}fa-circle-exclamation{{ else }}fa-circle-pause{{ end }} me-1"></i>
+                    <span id="badge-tunnel-state-text">{{ .Status.State }}</span>
+                </span>
+            </div>
+
+            <div class="card-body p-4">
+                {{/* ─── Banner Informativo de Conexão Ativa ─── */}}
+                <div id="tunnel-online-banner" class="alert alert-success bg-black border-success d-flex align-items-center mb-4 {{ if ne .Status.State "ONLINE" }}d-none{{ end }}">
+                    <i class="fa-solid fa-shield-halved fs-3 text-success me-3"></i>
+                    <div>
+                        <div class="fw-bold text-success mb-1">Túnel Conectado e Operando</div>
+                        <small class="text-light">Pronto para receber telemetria de qualquer máquina local ou externa.</small>
+                    </div>
+                </div>
+
+                {{/* ─── Endereço de Telemetria (Uso Operacional) ─── */}}
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold text-uppercase d-flex justify-content-between">
+                        <span><i class="fa-solid fa-globe me-1 text-info"></i> <span data-i18n="remote_public_url_label">Endereço de Telemetria Unificado</span></span>
+                        <span class="text-success small"><i class="fa-solid fa-lock me-1"></i>HTTPS Ativo</span>
+                    </label>
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control bg-black text-info font-monospace border-secondary py-2 fs-6"
+                               id="public-telemetry-url"
+                               value="{{ if .Status.TelemetryURL }}{{ .Status.TelemetryURL }}{{ else if .Settings.NgrokDomain }}https://{{ .Settings.NgrokDomain }}/api/telemetry{{ else }}Aguardando conexão do túnel...{{ end }}"
+                               readonly>
+                        <button class="btn btn-info text-dark fw-bold copy-btn px-4" type="button" data-target="public-telemetry-url" title="Copiar Link">
+                            <i class="fa-solid fa-copy me-1"></i> <span data-i18n="common_copy">Copiar Link</span>
+                        </button>
+                    </div>
+                    <small class="text-muted" data-i18n="remote_public_url_hint">
+                        Cole este endereço em qualquer programa, script ou máquina (local ou externa) para enviar telemetria.
+                    </small>
+                </div>
+
+                {{/* Mensagem de Erro (se houver) */}}
+                <div id="tunnel-error-box" class="alert alert-danger bg-black border-danger small {{ if not .Status.ErrorMessage }}d-none{{ end }} mb-4">
+                    <i class="fa-solid fa-circle-exclamation me-1"></i>
+                    <span id="tunnel-error-msg">{{ .Status.ErrorMessage }}</span>
+                </div>
+
+                {{/* ─── Configurações e Controles do Túnel ─── */}}
+                <div class="border-top border-secondary pt-3">
+                    <form action="/api/tunnel/save" method="POST" id="tunnelConfigForm">
+                        {{/* Authtoken */}}
+                        <div class="mb-3">
+                            <label for="ngrok_auth_token" class="form-label text-light small fw-bold">
+                                <i class="fa-solid fa-key me-1 text-warning"></i>
+                                <span data-i18n="remote_token_label">Ngrok Authtoken</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="password" class="form-control bg-black text-white border-secondary font-monospace"
+                                       id="ngrok_auth_token" name="ngrok_auth_token"
+                                       placeholder="Ex: 34Z5srcw..."
+                                       value="{{ .Settings.NgrokAuthToken }}" required>
+                                <button class="btn btn-outline-secondary" type="button" id="btn-toggle-token" title="Mostrar/Ocultar Token">
+                                    <i class="fa-solid fa-eye" id="icon-toggle-token"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted" data-i18n="remote_token_hint">
+                                Token obtido em <em>Your Authtoken</em> no painel do Ngrok.
+                            </small>
+                        </div>
+
+                        {{/* Static Domain */}}
+                        <div class="mb-4">
+                            <label for="ngrok_domain" class="form-label text-light small fw-bold">
+                                <i class="fa-solid fa-link me-1 text-info"></i>
+                                <span data-i18n="remote_domain_label">Domínio Estático Fixo</span>
+                            </label>
+                            <input type="text" class="form-control bg-black text-white border-secondary font-monospace"
+                                   id="ngrok_domain" name="ngrok_domain"
+                                   placeholder="Ex: seu-dominio.ngrok-free.dev"
+                                   value="{{ .Settings.NgrokDomain }}">
+                            <small class="text-muted" data-i18n="remote_domain_hint">
+                                Domínio permanente registrado no Ngrok (Cloud Edge &gt; Domains).
+                            </small>
+                        </div>
+
+                        {{/* ─── Ação Unificada do Túnel (Apenas UM botão visível por vez) ─── */}}
+                        <div class="d-grid gap-2">
+                            <button type="submit" id="btn-start-tunnel" class="btn btn-success py-2 fw-bold {{ if eq .Status.State "ONLINE" }}d-none{{ end }}">
+                                <i class="fa-solid fa-play me-2" id="icon-start-tunnel"></i>
+                                <span id="text-start-tunnel">Salvar e Iniciar Túnel</span>
+                            </button>
+                            <button type="button" id="btn-stop-tunnel" class="btn btn-outline-danger py-2 fw-bold {{ if ne .Status.State "ONLINE" }}d-none{{ end }}">
+                                <i class="fa-solid fa-stop me-2" id="icon-stop-tunnel"></i>
+                                <span id="text-stop-tunnel" data-i18n="remote_btn_stop">Desconectar Túnel</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {{/* ─── Rodapé do Card ─── */}}
+            <div class="card-footer bg-black bg-opacity-25 border-secondary text-muted small d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="fa-solid fa-server me-1"></i> Porta Local: <strong>8080</strong>
+                    <span class="mx-2">&bull;</span>
+                    <i class="fa-solid fa-clock me-1"></i> Iniciado: <span id="tunnel-started-time">{{ if .Status.StartedAt }}{{ .Status.StartedAt }}{{ else }}--{{ end }}</span>
+                </span>
+                <a href="https://dashboard.ngrok.com/signup" target="_blank" class="text-info text-decoration-none">
+                    <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> <span data-i18n="remote_signup_link">Painel Ngrok</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/remote.js"></script>
+{{ end }}

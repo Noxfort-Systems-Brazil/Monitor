@@ -97,7 +97,7 @@ func (h *ContactHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+	Redirect(w, r, "/contacts", http.StatusSeeOther)
 }
 
 // HandleDelete removes a contact.
@@ -123,5 +123,38 @@ func (h *ContactHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+	Redirect(w, r, "/contacts", http.StatusSeeOther)
+}
+
+// HandleUpdate modifies an existing contact.
+func (h *ContactHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idInt, err := strconv.Atoi(r.FormValue("id"))
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	contact := &domain.Contact{
+		ID:             int64(idInt),
+		Name:           r.FormValue("name"),
+		Email:          r.FormValue("email"),
+		Phone:          r.FormValue("phone"),
+		Role:           r.FormValue("role"),
+		NotifyCritical: r.FormValue("notify_critical") == "on" || r.FormValue("notify_critical") == "true" || r.FormValue("notify_critical") == "1",
+		Enabled:        true,
+		TelegramChatID: r.FormValue("telegram_chat_id"),
+	}
+
+	if err := h.repo.UpdateContact(contact); err != nil {
+		log.Printf("[CONTACTS] Failed to update: %v", err)
+		http.Error(w, "Failed to update contact", http.StatusInternalServerError)
+		return
+	}
+
+	Redirect(w, r, "/contacts", http.StatusSeeOther)
 }
