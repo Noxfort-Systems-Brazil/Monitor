@@ -1,30 +1,30 @@
-[📚 Central de Documentação](INDEX.md) > **Acesso Remoto & Ingestão via Ngrok**
+[📚 Documentation Hub](INDEX.md) > **Remote Access & Ngrok Ingestion**
 
 ---
 
-# 🌐 Acesso Remoto & Ingestão via Túnel Ngrok: Noxfort Monitor™
+# 🌐 Remote Access & Ingestion via Ngrok Tunnel: Noxfort Monitor™
 
-Este documento descreve a arquitetura de comunicação WAN do **Noxfort Monitor™ v2.0**, cobrindo o subsistema de túnel seguro reverso via **Ngrok**, a ingestão de telemetria através da internet pública e a conexão de agentes de borda remotos (como **Synapse**, **Carina** ou nós IoT).
+This document details the WAN communication architecture of **Noxfort Monitor™ v2.0**, covering the secure reverse tunnel subsystem powered by **Ngrok**, public internet telemetry ingestion, and connecting remote edge agents (such as **Synapse**, **Carina**, or IoT nodes).
 
 ---
 
-## 1. Por que Túnel Remoto em Ambientes Industriais?
+## 1. Why Remote Tunneling in Industrial Environments?
 
-Em cenários industriais e de telemetria distribuída, o servidor central do Monitor frequentemente opera dentro de uma rede local (LAN), atrás de roteadores com **NAT**, **CGNAT** de operadoras móveis ou **firewalls corporativos rigorosos** que impedem a abertura de portas de entrada (`port forwarding`).
+In industrial and distributed telemetry deployments, the central Monitor server frequently operates inside a local area network (LAN), behind **NAT** routers, cellular carrier **CGNAT**, or **strict corporate firewalls** that prevent inbound port forwarding.
 
 ```mermaid
 graph LR
-    subgraph "Rede Externa / WAN"
-        Carina[Agente Carina / Edge]
-        Synapse[Agente Synapse / Cloud]
-        Sensor[Sensor IoT / 4G]
+    subgraph "External Network / WAN"
+        Carina[Carina Agent / Edge]
+        Synapse[Synapse Agent / Cloud]
+        Sensor[IoT Sensor / 4G]
     end
 
-    subgraph "Nuvem Segura Ngrok"
-        EdgeURL[https://seu-dominio.ngrok-free.app]
+    subgraph "Ngrok Secure Cloud"
+        EdgeURL[https://your-domain.ngrok-free.app]
     end
 
-    subgraph "Rede Local / Firewall Industrial (LAN)"
+    subgraph "Local Network / Industrial Firewall (LAN)"
         TunnelManager[Tunnel Manager / Ngrok Driver]
         MonitorServer[Noxfort Monitor HTTP :8080]
         StateManager[State Manager & Watchdog]
@@ -34,18 +34,18 @@ graph LR
     Synapse -->|POST /api/telemetry| EdgeURL
     Sensor -->|POST /api/telemetry| EdgeURL
 
-    EdgeURL -->|Túnel Seguro Outbound| TunnelManager
-    TunnelManager -->|Proxy Local| MonitorServer
+    EdgeURL -->|Secure Outbound Tunnel| TunnelManager
+    TunnelManager -->|Local Proxy| MonitorServer
     MonitorServer --> StateManager
 ```
 
-Com o subsistema de túnel, o Noxfort Monitor abre uma conexão **outbound** (de dentro para fora) criptografada via TLS para o serviço Ngrok, expondo um ponto de extremidade público estável sem exigir IP fixo público.
+With the tunnel subsystem, Noxfort Monitor establishes an encrypted TLS **outbound** connection (from inside to outside) to the Ngrok service, exposing a stable public endpoint without requiring a static public IP.
 
 ---
 
-## 2. A Camada de Abstração de Túnel (`internal/tunnel`)
+## 2. The Tunnel Abstraction Layer (`internal/tunnel`)
 
-Seguindo o Princípio da Inversão de Dependência (**DIP**), a camada de transporte não depende diretamente do executável do Ngrok, mas de interfaces desacopladas ([`internal/tunnel/driver.go`](../internal/tunnel/driver.go)):
+Adhering to the Dependency Inversion Principle (**DIP**), the transport layer does not couple directly to the Ngrok executable, but rather to decoupled interfaces ([`internal/tunnel/driver.go`](../internal/tunnel/driver.go)):
 
 ```go
 type Service interface {
@@ -56,32 +56,32 @@ type Service interface {
 }
 ```
 
-### Componentes Principais:
+### Core Components:
 1. **`NgrokDriver` ([`ngrok_driver.go`](../internal/tunnel/ngrok_driver.go))**:
-   - Detecta a presença do binário `ngrok` no `$PATH` do sistema operacional.
-   - Orquestra o ciclo de vida do processo filho (`ngrok http <porta>`).
-   - Monitora o endpoint de API local do Ngrok (`http://127.0.0.1:4040/api/tunnels`) para extrair a URL pública HTTPS gerada e diagnosticar erros em tempo real.
+   - Detects the presence of the `ngrok` executable in system `$PATH`.
+   - Manages child process lifecycle (`ngrok http <port>`).
+   - Polls Ngrok's local client API (`http://127.0.0.1:4040/api/tunnels`) to extract the generated public HTTPS URL and inspect errors in real time.
 2. **`Manager` ([`manager.go`](../internal/tunnel/manager.go))**:
-   - Mantém o estado da conexão na memória (`TunnelStatus`).
-   - Constrói automaticamente o endereço unificado de telemetria:
-     `https://seu-dominio.ngrok-free.app/api/telemetry`
+   - Maintains connection status in memory (`TunnelStatus`).
+   - Automatically constructs the unified telemetry ingestion address:
+     `https://your-domain.ngrok-free.app/api/telemetry`
 3. **`TunnelHandler` ([`tunnel_handler.go`](../internal/transport/http/tunnel_handler.go))**:
-   - Expõe a interface visual em `/remote` e endpoints de controle da API.
+   - Serves the `/remote` management UI and API control endpoints.
 
 ---
 
-## 3. Configuração & Persistência
+## 3. Configuration & Persistence
 
-As configurações do túnel são salvas diretamente na tabela `settings` do banco de dados ativo ([`domain.Settings`](../internal/domain/settings.go)):
+Tunnel configurations are stored directly in the `settings` table of the active database ([`domain.Settings`](../internal/domain/settings.go)):
 
-| Parâmetro | Chave JSON / DB | Descrição |
+| Parameter | JSON / DB Key | Description |
 | :--- | :--- | :--- |
-| **AuthToken** | `ngrok_auth_token` | Token pessoal obtido no painel do Ngrok. |
-| **Domínio Estático** | `ngrok_domain` | Domínio customizado ou gratuito (ex: `seu-monitor.ngrok-free.app`). |
-| **Inicialização Automática** | `ngrok_enabled` | Booleano. Se `true`, o túnel inicia sozinho ao ligar o Monitor. |
+| **AuthToken** | `ngrok_auth_token` | Personal token obtained from the Ngrok dashboard. |
+| **Static Domain** | `ngrok_domain` | Custom or reserved free domain (e.g., `your-monitor.ngrok-free.app`). |
+| **Auto-Start** | `ngrok_enabled` | Boolean. If `true`, the tunnel starts automatically when the Monitor boots. |
 
-### 3.1 Inicialização Automática no Boot
-No arranque da aplicação ([`cmd/server/main.go:L198`](../cmd/server/main.go#L198)), o servidor avalia:
+### 3.1 Automatic Startup at Boot
+During application initialization ([`cmd/server/main.go:L198`](../cmd/server/main.go#L198)), the server checks:
 ```go
 if settings.NgrokEnabled && settings.NgrokAuthToken != "" {
     log.Printf("[BOOT] Auto-starting Ngrok Tunnel on domain '%s'...", settings.NgrokDomain)
@@ -93,28 +93,28 @@ if settings.NgrokEnabled && settings.NgrokAuthToken != "" {
 
 ---
 
-## 4. Integração com Nós de Borda (Carina, Synapse, IoT)
+## 4. Integration with Edge Nodes (Carina, Synapse, IoT)
 
-Quando o túnel está ativo, o Monitor ajusta dinamicamente a interface do operador:
-1. Na tela de **Sistemas Monitorados** (`/devices`), o endereço sugerido para os nós clientes deixa de ser o IP local (`192.168.x.x`) e passa a exibir a URL pública HTTPS do túnel.
-2. O botão **"Copiar Endereço"** copia o endpoint completo pronto para ser colado nas variáveis de ambiente ou configurações dos clientes.
+When the tunnel is active, the Monitor dynamically adapts the operator interface:
+1. On the **Monitored Systems** view (`/devices`), suggested ingestion commands update from local IP addresses (`192.168.x.x`) to the public HTTPS tunnel URL.
+2. The **"Copy Address"** button copies the full endpoint ready to paste into client environment variables or configs.
 
-### Exemplo de Envio de Telemetria Remota via cURL
-Nós remotos podem enviar eventos via HTTP POST padrão:
+### Remote Telemetry Dispatch Example via cURL
+Remote nodes transmit events using standard HTTP POST:
 
 ```bash
-curl -X POST "https://seu-monitor.ngrok-free.app/api/telemetry" \
+curl -X POST "https://your-monitor.ngrok-free.app/api/telemetry" \
   -H "Content-Type: application/json" \
   -d '{
     "category": "HARDWARE",
     "origin": "carina-station-03",
     "level": "INFO",
-    "message": "System OK - Telemetria via WAN",
+    "message": "System OK - Telemetry over WAN",
     "occurred_at": "2026-09-05T14:30:00Z"
   }'
 ```
 
-**Resposta do Servidor**:
+**Server Response**:
 ```json
 {
   "status": "received"
@@ -123,21 +123,21 @@ curl -X POST "https://seu-monitor.ngrok-free.app/api/telemetry" \
 
 ---
 
-## 5. Endpoints de Controle do Túnel
+## 5. Tunnel Control Endpoints
 
-| Método | Endpoint | Privilégio | Descrição |
+| Method | Endpoint | Privilege | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/remote` | Operador / Admin | Interface gráfica de gerenciamento do túnel. |
-| `GET` | `/api/tunnel/status` | Autenticado | Retorna o status ao vivo (`active`, `public_url`, `error`, etc.). |
-| `POST` | `/api/tunnel/save` | Admin | Salva credenciais e flags no banco de dados. |
-| `POST` | `/api/tunnel/start` | Admin | Inicia o processo do túnel sob demanda. |
-| `POST` | `/api/tunnel/stop` | Admin | Encerra o túnel imediatamente. |
+| `GET` | `/remote` | Operator / Admin | Graphical web UI for tunnel management. |
+| `GET` | `/api/tunnel/status` | Authenticated | Returns live status (`active`, `public_url`, `error`, etc.). |
+| `POST` | `/api/tunnel/save` | Admin | Persists credentials and configuration flags to the database. |
+| `POST` | `/api/tunnel/start` | Admin | Launches the tunnel process on demand. |
+| `POST` | `/api/tunnel/stop` | Admin | Terminates the tunnel immediately. |
 
 ---
 
-### 🔗 Documentos Relacionados
-* 🏗️ [Arquitetura Geral](../ARCHITECTURE.md) — Visão do fluxo de entrada de telemetria
-* 📡 [Referência de APIs](API_REFERENCE.md) — Especificação detalhada de `POST /api/telemetry`
-* 🗄️ [Banco de Dados & Persistência](DATABASE.md) — Estrutura da tabela `settings`
-* 🔐 [Segurança e RBAC](SECURITY.md) — Proteção das APIs de configuração
-* 🖥️ [Aplicação Desktop](DESKTOP_APP.md) — Acesso e monitoramento em ambiente local
+### 🔗 Related Documentation
+* 🏗️ [System Architecture](../ARCHITECTURE.md) — Telemetry ingress pipeline overview
+* 📡 [API Reference](API_REFERENCE.md) — Detailed specification of `POST /api/telemetry`
+* 🗄️ [Database & Persistence](DATABASE.md) — Structure of the `settings` table
+* 🔐 [Security & RBAC](SECURITY.md) — Protection of administrative configuration endpoints
+* 🖥️ [Desktop Application](DESKTOP_APP.md) — Local access and desktop monitoring

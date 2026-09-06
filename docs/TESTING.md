@@ -1,32 +1,32 @@
-[📚 Central de Documentação](INDEX.md) > **Testes & Garantia de Qualidade (QA)**
+[📚 Documentation Hub](INDEX.md) > **Testing & Quality Assurance (QA)**
 
 ---
 
-# 🧪 Testes & Garantia de Qualidade (QA): Noxfort Monitor™
+# 🧪 Testing & Quality Assurance (QA): Noxfort Monitor™
 
-Este documento descreve os padrões e procedimentos de teste do **Noxfort Monitor™ v2.0**, incluindo a execução da suíte de testes unitários automatizados, testes de integração com mocks, testes manuais de ponta a ponta (**E2E**) via **MQTT** e **HTTP cURL**, e diagnósticos de canais de alerta.
+This document outlines the testing standards and procedures for **Noxfort Monitor™ v2.0**, including running the automated unit test suite, integration testing with in-memory mocks, manual end-to-end (**E2E**) verification via **MQTT** and **HTTP cURL**, and notification channel diagnostics.
 
 ---
 
-## 1. Executando a Suíte Automatizada
+## 1. Running the Automated Test Suite
 
-O projeto conta com ampla cobertura de testes unitários em todos os pacotes internos (`internal/monitor`, `internal/security`, `internal/storage`, `internal/transport/http`, `internal/desktop`, `internal/protocol`, `internal/tunnel`).
+The project maintains comprehensive unit test coverage across all internal packages (`internal/monitor`, `internal/security`, `internal/storage`, `internal/transport/http`, `internal/desktop`, `internal/protocol`, `internal/tunnel`).
 
-Para rodar todos os testes automatizados com relatório verboso:
+To execute all automated tests with verbose reporting:
 ```bash
 make test
 ```
-*Nos bastidores, o Makefile executa `go test ./... -v`.*
+*Under the hood, the Makefile runs `go test ./... -v`.*
 
 ---
 
-## 2. Filosofia de Testes & Mocks em Memória
+## 2. Testing Philosophy & In-Memory Mocks
 
-Graças à estrita Injeção de Dependências (**DI**) implementada no projeto, os testes do núcleo lógico (`internal/monitor` e `internal/security`) não dependem de bancos de dados em disco ou serviços externos rodando:
+Thanks to strict Dependency Injection (**DI**) across the codebase, core logic tests (`internal/monitor` and `internal/security`) do not depend on on-disk databases or external running daemons:
 
 ```mermaid
 graph LR
-    subgraph "Ambiente de Testes Unitários"
+    subgraph "Unit Testing Environment"
         MockDev[MockDeviceRepository]
         MockTel[MockTelemetryRepository]
         MockAlert[MockAlertDispatcher]
@@ -46,21 +46,21 @@ graph LR
     MockDev --> State
 ```
 
-### O Que É Validado nos Testes Automatizados:
-* **Filtro Inteligente de Heartbeats ([`state_test.go`](../internal/monitor/state_test.go))**: Garante que mensagens `INFO` com termos de keep-alive atualizem o timestamp sem gerar incidentes nem disparar alertas.
-* **Watchdog Timing & Detecção de Queda ([`engine_test.go`](../internal/monitor/engine_test.go))**: Simula sistemas sem comunicação além de 5 minutos, garantindo que o Engine sintetize o evento `CRITICAL` `System OFFLINE` e o subsequente `System ONLINE` de recuperação.
-* **Roteamento RBAC por Função ([`router_test.go`](../internal/monitor/router_test.go))**: Confirma que alertas `HARDWARE` são direcionados apenas a técnicos/administradores, e alertas `SOFTWARE` apenas a programadores/administradores.
-* **Criptografia & Sessões ([`hasher_test.go`](../internal/security/hasher_test.go), [`session_test.go`](../internal/security/session_test.go))**: Valida o hashing seguro com salt e expiração de sessões.
-* **Hot-Reload de Banco ([`db_manager_test.go`](../internal/storage/db_manager_test.go))**: Valida a troca da conexão sem fechar repositórios em uso.
+### What Is Validated in Automated Tests:
+* **Smart Heartbeat Filter ([`state_test.go`](../internal/monitor/state_test.go))**: Confirms that `INFO` messages containing keep-alive keywords update presence timestamps without creating incidents or dispatching alerts.
+* **Watchdog Timing & Outage Detection ([`engine_test.go`](../internal/monitor/engine_test.go))**: Simulates devices silent for more than 5 minutes, ensuring the Engine synthesizes the `CRITICAL` `System OFFLINE` event and the subsequent `System ONLINE` recovery event.
+* **Role-Based RBAC Routing ([`router_test.go`](../internal/monitor/router_test.go))**: Confirms that `HARDWARE` alerts are routed strictly to technicians/admins, and `SOFTWARE` alerts strictly to programmers/admins.
+* **Cryptography & Sessions ([`hasher_test.go`](../internal/security/hasher_test.go), [`session_test.go`](../internal/security/session_test.go))**: Verifies secure salted password hashing and session token expiration.
+* **Database Hot-Reload ([`db_manager_test.go`](../internal/storage/db_manager_test.go))**: Validates live connection switching without closing active repository consumers.
 
 ---
 
-## 3. Testes Manuais E2E
+## 3. Manual E2E Testing
 
-### 3.1 Teste de Ingestão via MQTT (`mosquitto_pub`)
-Certifique-se de que o broker está ativo (`make broker-start`):
+### 3.1 MQTT Ingestion Test (`mosquitto_pub`)
+Ensure the local broker is running (`make broker-start`):
 
-#### 1. Simular Batimento Cardíaco Normal (Keep-alive)
+#### 1. Simulate Normal Heartbeat (Keep-alive)
 ```bash
 mosquitto_pub -t "noxfort/devices/pump-01/telemetry" -m '{
   "category": "HARDWARE",
@@ -70,24 +70,24 @@ mosquitto_pub -t "noxfort/devices/pump-01/telemetry" -m '{
   "occurred_at": "2026-09-05T10:00:00Z"
 }'
 ```
-*Resultado Esperado*: O dispositivo `pump-01` atualiza o campo `last_seen`. Nenhum alerta é emitido e nenhum registro suja a tabela `telemetry_logs`.
+*Expected Result*: Device `pump-01` updates its `last_seen` timestamp. No alert is dispatched and no unneeded record is added to `telemetry_logs`.
 
-#### 2. Simular Incidente Crítico de Hardware
+#### 2. Simulate Critical Hardware Incident
 ```bash
 mosquitto_pub -t "noxfort/devices/pump-01/telemetry" -m '{
   "category": "HARDWARE",
   "origin": "pump-01",
   "level": "CRITICAL",
-  "message": "Falha na Válvula de Pressão: Pressão 120 PSI",
+  "message": "Pressure Valve Failure: Pressure 120 PSI",
   "occurred_at": "2026-09-05T10:05:00Z"
 }'
 ```
-*Resultado Esperado*: O evento é salvo na tabela `telemetry_logs`, surge no Dashboard Web e dispara notificações imediatas para contatos com função `TECHNICIAN` e `ADMIN`.
+*Expected Result*: Event is persisted in `telemetry_logs`, appears on the Web Dashboard, and immediately dispatches alerts to contacts with `TECHNICIAN` and `ADMIN` roles.
 
 ---
 
-### 3.2 Teste de Ingestão via HTTP REST (`cURL`)
-Para validar a rota `POST /api/telemetry` utilizada por agentes de borda remotos:
+### 3.2 HTTP REST Ingestion Test (`cURL`)
+To validate the `POST /api/telemetry` route utilized by remote edge agents:
 
 ```bash
 curl -X POST http://localhost:8080/api/telemetry \
@@ -96,25 +96,25 @@ curl -X POST http://localhost:8080/api/telemetry \
     "category": "SOFTWARE",
     "origin": "synapse-node-02",
     "level": "WARNING",
-    "message": "Consumo de memória RAM ultrapassou 80%",
+    "message": "RAM consumption exceeded 80%",
     "occurred_at": "2026-09-05T17:10:00Z"
   }'
 ```
-*Resultado Esperado*: Resposta HTTP `200 OK` com `{"status":"received"}` e registro do incidente no Dashboard.
+*Expected Result*: HTTP `200 OK` response with `{"status":"received"}` and incident logged on the Dashboard.
 
 ---
 
-## 4. Diagnóstico de Canais de Alerta
+## 4. Notification Channel Diagnostics
 
-O módulo [`ChannelTester`](../internal/monitor/tester.go) permite validar credenciais de notificação sob demanda sem gerar incidentes falsos:
+The [`ChannelTester`](../internal/monitor/tester.go) module enables on-demand validation of notification credentials without triggering false incidents:
 
-* **Teste SMTP (Email)**: Na aba Configurações da UI (`/settings`) ou via `POST /settings/test`, o sistema envia um email de verificação aos administradores.
-* **Teste Telegram**: Na tela `/settings` ou via `POST /settings/test-telegram`, o sistema formata e envia uma mensagem MarkdownV2 para o chat informado.
+* **SMTP Test (Email)**: On the UI Settings tab (`/settings`) or via `POST /settings/test`, the system sends a verification email to administrators.
+* **Telegram Test**: On the `/settings` screen or via `POST /settings/test-telegram`, the system formats and transmits a MarkdownV2 test message to the configured chat.
 
 ---
 
-### 🔗 Documentos Relacionados
-* 🏗️ [Arquitetura Geral](../ARCHITECTURE.md) — Filosofia de isolamento e injeção de dependências
-* 📡 [Referência de APIs](API_REFERENCE.md) — Especificação dos payloads JSON
-* 👨‍💻 [Guia do Desenvolvedor](DEVELOPER_GUIDES.md) — Instruções para rodar localmente
-* 🔍 [Trilha de Auditoria](AUDIT_TRAIL.md) — Registros dos testes de alerta e status de entrega
+### 🔗 Related Documentation
+* 🏗️ [System Architecture](../ARCHITECTURE.md) — Isolation philosophy and dependency injection
+* 📡 [API Reference](API_REFERENCE.md) — JSON payload specifications
+* 👨‍💻 [Developer Guide](DEVELOPER_GUIDES.md) — Local environment and build steps
+* 🔍 [Audit Trail](AUDIT_TRAIL.md) — Alert dispatch test logs and delivery statuses

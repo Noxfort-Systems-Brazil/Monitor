@@ -11,93 +11,93 @@
 
 <hr/>
 
-## 📖 Resumo Executivo
+## 📖 Executive Summary
 
-O **Noxfort Monitor™** é uma plataforma industrial de observabilidade orientada a eventos (*Event-Driven*), desenvolvida em Go para monitorar sistemas distribuídos, agentes autônomos (como **Synapse** e **Carina**) e hardware IoT. 
+**Noxfort Monitor™** is an industrial event-driven observability platform developed in Go to monitor distributed systems, autonomous agents (such as **Synapse** and **Carina**), and IoT hardware.
 
-Possui motor duplo de banco de dados (**PostgreSQL** para operação corporativa em rede e **SQLite** embarcado com hot-reload a quente), ingestão simultânea via **MQTT** e **HTTP REST**, detecção de falhas silenciosas via **Watchdog Engine**, despacho de alertas multicanal com controle de acesso baseado em papéis (**RBAC**), túnel reverso seguro via **Ngrok** para nós de borda em redes remotas, e interface nativa em **Wails v2** com suporte a modo **Headless**.
-
----
-
-## ⚡ Principais Funcionalidades
-
-### 1. Ingestão Dual de Telemetria (MQTT + HTTP REST)
-- **Ingestão Assíncrona MQTT**: Processamento paralelo de pacotes JSON sobre `tcp://127.0.0.1:1883` sem bloqueio de I/O.
-- **API REST Direta**: Endpoint `POST /api/telemetry` para sensores, nós de campo e scripts cURL sem necessidade de client MQTT nativo.
-- **Filtro Inteligente de Ruído**: Mensagens de keep-alive ("*heartbeat*", "*system ok*") atualizam o timestamp de presença sem sobrecarregar o banco de dados.
-
-### 2. Motor de Persistência Dual-Engine (PostgreSQL & SQLite)
-- **Hot-Reload a Quente**: O [`DBManager`](docs/DATABASE.md) permite alternar entre SQLite e PostgreSQL em tempo de execução via tela `/server` sem reiniciar o processo ou derrubar conexões.
-- **Migração Automática**: Sincronização íntegra de dispositivos, configurações, usuários e contatos entre bancos de dados.
-- **SQLite Pure-Go**: Utiliza `modernc.org/sqlite`, eliminando dependências de compilador CGO.
-
-### 3. Acesso Remoto & Ingestão WAN (Túnel Ngrok)
-- **Túnel Seguro Embutido**: Transpõe firewalls e CGNAT industriais através do subsistema [`internal/tunnel`](docs/REMOTE_ACCESS.md), expondo uma URL pública segura com domínio estático no boot.
-- **Integração na UI**: A tela `/devices` adapta os comandos sugeridos com o endpoint público do túnel pronto para cópia.
-
-### 4. Watchdog Engine (Detecção de Falhas Silenciosas)
-- **Varredura Ativa**: Monitora continuamente o timestamp `LastSeen` dos equipamentos. Se um sistema silenciar por mais de 5 minutos, sintetiza um incidente `CRITICAL` `System OFFLINE` e auto-resolve quando o sinal retorna.
-
-### 5. Roteamento Inteligente & Trilha de Auditoria
-- **Despacho Baseado em Funções (RBAC)**: Alertas `HARDWARE` são roteados para Técnicos; alertas `SOFTWARE` para Programadores; Administradores recebem visibilidade total.
-- **Multicanal Concorrente**: Envio em goroutines via Email (SMTP) e Telegram Bot (MarkdownV2).
-- **Trilha de Auditoria Tripla**: Rastreamento imutável de acessos e logins (`SecurityAuditLog`), conformidade de entrega de alertas (`AlertDispatchLog`) e histórico de downtime (`DeviceStateTransition`).
-
-### 6. Interface Desktop Wails v2 & Modo Headless
-- **Desktop Nativo**: Construído com Wails v2 e WebKitGTK nativo do Linux, suporte a trava de instância única (Single-Instance IPC) e minimização para a barra de tarefas (Systray).
-- **Modo Servidor (Headless)**: Executa como daemon em segundo plano com a flag `--headless` para servidores e contêineres sem display gráfico.
-- **Pacote Debian**: Script de compilação de pacote `.deb` integrado para Ubuntu/Debian (`make deb`).
+It features a dual-engine database persistence layer (**PostgreSQL** for enterprise network operations and embedded **SQLite** with live hot-reloading), concurrent telemetry ingestion via **MQTT** and **HTTP REST**, silent failure detection through the **Watchdog Engine**, multi-channel alert dispatching with Role-Based Access Control (**RBAC**), secure reverse tunneling via **Ngrok** for edge nodes on remote networks, and a native desktop interface powered by **Wails v2** with **Headless** mode support.
 
 ---
 
-## 📚 Biblioteca de Documentação Técnica
+## ⚡ Key Features
 
-Navegue pela documentação técnica modular e interconectada:
+### 1. Dual Telemetry Ingestion (MQTT + HTTP REST)
+- **Asynchronous MQTT Ingestion**: Parallel processing of JSON payloads over `tcp://127.0.0.1:1883` without I/O blocking.
+- **Direct REST API**: `POST /api/telemetry` endpoint for sensors, field nodes, and cURL scripts without requiring a native MQTT client.
+- **Intelligent Noise Filter**: Keep-alive messages ("*heartbeat*", "*system ok*") update presence timestamps without burdening the database.
 
-* 🧭 **[Central de Documentação (docs/INDEX.md)](docs/INDEX.md)**: Mapa mestre de conteúdo e grafo de conhecimento.
-* 🏗️ **[Arquitetura do Sistema (ARCHITECTURE.md)](ARCHITECTURE.md)**: Concorrência, camadas SOLID, injeção de dependência e fluxo de dados.
-* 📡 **[Referência de APIs & Protocolos](docs/API_REFERENCE.md)**: Especificação formal dos endpoints HTTP REST e tópicos MQTT.
-* 🗄️ **[Banco de Dados & Persistência Dual-Engine](docs/DATABASE.md)**: PostgreSQL, SQLite, DBManager e migração de dados.
-* 🔐 **[Segurança, Autenticação & RBAC](docs/SECURITY.md)**: Sessões, cookies, hashing com salt, superusuário e controle de papéis.
-* 🌐 **[Acesso Remoto & Túnel Ngrok](docs/REMOTE_ACCESS.md)**: Ingestão de telemetria WAN para nós de borda em redes externas.
-* 🖥️ **[Aplicação Desktop & Operação](docs/DESKTOP_APP.md)**: Wails v2, WebKitGTK, single-instance lock e instalador `.deb`.
-* 🔍 **[Trilha de Auditoria](docs/AUDIT_TRAIL.md)**: Conformidade regulatória, SLA de entrega de alertas e histórico de paradas.
-* 🚀 **[Guia de Implantação em Produção](docs/DEPLOYMENT.md)**: Serviço systemd headless, proxy NGINX com SSL e setup corporativo.
-* 👨‍💻 **[Guia do Desenvolvedor](docs/DEVELOPER_GUIDES.md)**: Configuração do ambiente local, convenções Go e extensibilidade.
-* 🧪 **[Testes & Garantia de Qualidade](docs/TESTING.md)**: Testes unitários com mocks, cURL e mosquitto_pub.
-* 🔬 **[Notas de Pesquisa & Decisões Técnicas](docs/RESEARCH_NOTES.md)**: Decisões arquiteturais e roadmap futuro.
+### 2. Dual-Engine Persistence (PostgreSQL & SQLite)
+- **Live Hot-Reload**: The [`DBManager`](docs/DATABASE.md) allows runtime switching between SQLite and PostgreSQL via the `/server` screen without restarting the process or dropping active connections.
+- **Automatic Migration**: Full, consistent synchronization of devices, configurations, users, and contacts between database engines.
+- **Pure-Go SQLite**: Built with `modernc.org/sqlite`, eliminating CGO compiler dependencies.
+
+### 3. Remote Access & WAN Ingestion (Ngrok Tunnel)
+- **Embedded Secure Tunnel**: Traverses industrial firewalls and CGNAT via the [`internal/tunnel`](docs/REMOTE_ACCESS.md) subsystem, exposing a secure public URL with static domain support at boot.
+- **UI Integration**: The `/devices` view automatically adapts suggested ingestion commands with the public tunnel endpoint ready to copy.
+
+### 4. Watchdog Engine (Silent Failure Detection)
+- **Active Polling**: Continuously monitors equipment `LastSeen` timestamps. If a system goes silent for more than 5 minutes, it synthesizes a `CRITICAL` `System OFFLINE` incident and automatically resolves it when the signal returns.
+
+### 5. Intelligent Routing & Audit Trail
+- **Role-Based Dispatch (RBAC)**: `HARDWARE` alerts are routed to Technicians; `SOFTWARE` alerts are routed to Programmers; Administrators receive complete visibility.
+- **Concurrent Multi-Channel**: Goroutine-based delivery via Email (SMTP) and Telegram Bot (MarkdownV2).
+- **Triple Audit Trail**: Immutable tracking of security access and logins (`SecurityAuditLog`), alert delivery compliance (`AlertDispatchLog`), and downtime history (`DeviceStateTransition`).
+
+### 6. Wails v2 Desktop Interface & Headless Mode
+- **Native Desktop**: Built with Wails v2 and native Linux WebKitGTK, supporting single-instance enforcement (Single-Instance IPC) and minimize-to-system-tray (Systray).
+- **Server Mode (Headless)**: Runs as a background daemon using the `--headless` flag for screenless servers and containerized deployments.
+- **Debian Packaging**: Built-in `.deb` package generation script for Ubuntu/Debian (`make deb`).
 
 ---
 
-## ⚙️ Guia de Início Rápido
+## 📚 Technical Documentation Hub
 
-### 1. Pré-Requisitos
-Certifique-se de possuir [Go 1.22+](https://go.dev/dl/) e as bibliotecas do WebKitGTK instaladas:
+Explore the modular, interconnected technical documentation:
+
+* 🧭 **[Documentation Hub (docs/INDEX.md)](docs/INDEX.md)**: Master table of contents and knowledge graph.
+* 🏗️ **[System Architecture (ARCHITECTURE.md)](ARCHITECTURE.md)**: Concurrency, SOLID layers, dependency injection, and data flow.
+* 📡 **[API & Protocol Reference](docs/API_REFERENCE.md)**: Formal specification of HTTP REST endpoints and MQTT topics.
+* 🗄️ **[Database & Dual-Engine Persistence](docs/DATABASE.md)**: PostgreSQL, SQLite, DBManager, and data migration.
+* 🔐 **[Security, Authentication & RBAC](docs/SECURITY.md)**: Sessions, cookies, salted hashing, superuser bootstrapping, and role enforcement.
+* 🌐 **[Remote Access & Ngrok Tunnel](docs/REMOTE_ACCESS.md)**: WAN telemetry ingestion for edge nodes on external networks.
+* 🖥️ **[Desktop Application & Operations](docs/DESKTOP_APP.md)**: Wails v2, WebKitGTK, single-instance lock, and `.deb` packaging.
+* 🔍 **[Audit Trail](docs/AUDIT_TRAIL.md)**: Regulatory compliance, alert delivery SLA, and downtime tracking.
+* 🚀 **[Production Deployment Guide](docs/DEPLOYMENT.md)**: Headless systemd service, NGINX reverse proxy with SSL, and enterprise setup.
+* 👨‍💻 **[Developer Guide](docs/DEVELOPER_GUIDES.md)**: Local environment setup, Go conventions, and extensibility.
+* 🧪 **[Testing & Quality Assurance](docs/TESTING.md)**: Unit testing with mocks, cURL, and mosquitto_pub.
+* 🔬 **[Research Notes & Technical Decisions](docs/RESEARCH_NOTES.md)**: Architectural decisions and future roadmap.
+
+---
+
+## ⚙️ Quickstart Guide
+
+### 1. Prerequisites
+Ensure you have [Go 1.22+](https://go.dev/dl/) and WebKitGTK libraries installed:
 ```bash
 sudo apt-get update && sudo apt-get install -y \
   libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev mosquitto
 ```
 
-### 2. Iniciar o Broker MQTT
+### 2. Start the MQTT Broker
 ```bash
 make broker-start
 ```
 
-### 3. Execução em Desenvolvimento (Desktop GUI)
+### 3. Run in Development Mode (Desktop GUI)
 ```bash
 make build
 make run
 ```
 
-### 4. Execução em Modo Servidor (Headless Daemon)
-Ideal para servidores sem interface gráfica:
+### 4. Run in Server Mode (Headless Daemon)
+Ideal for servers without a graphical interface:
 ```bash
 make run-headless
-# Ou executando o binário compilado:
+# Or run the compiled binary directly:
 ./bin/noxfort-monitor --headless
 ```
 
-### 5. Gerar Instalador Debian (`.deb`)
+### 5. Generate Debian Installer (`.deb`)
 ```bash
 make deb
 sudo dpkg -i build_deb/noxfort-monitor_2.0.1_amd64.deb
@@ -105,22 +105,22 @@ sudo dpkg -i build_deb/noxfort-monitor_2.0.1_amd64.deb
 
 ---
 
-## 🔐 Autenticação & Credenciais Padrão
+## 🔐 Authentication & Default Credentials
 
-* **Painel Web**: Acessível em `http://localhost:8080`.
-* **Ambiente de Testes / Avaliação**: Se nenhum arquivo `.env` for configurado, as credenciais padrão de primeiro acesso são:
-  * **Usuário**: `admin`
-  * **Senha**: `admin`
-* **Ambiente de Produção**: Copie `.env.example` para `.env` e configure senhas fortes antes da implantação:
+* **Web Dashboard**: Accessible at `http://localhost:8080`.
+* **Testing / Evaluation Environment**: If no `.env` file is present, the default first-access credentials are:
+  * **Username**: `admin`
+  * **Password**: `admin`
+* **Production Environment**: Copy `.env.example` to `.env` and configure strong passwords prior to deployment:
   ```bash
   cp .env.example .env
-  # Edite MONITOR_ADMIN_USER e MONITOR_ADMIN_PASSWORD
+  # Edit MONITOR_ADMIN_USER and MONITOR_ADMIN_PASSWORD
   ```
-* **Armazenamento de Dados**: No modo SQLite local, o arquivo de banco reside em `~/Documentos/Monitor/monitor_logs.db`. No modo PostgreSQL, os dados residem no servidor de banco de dados configurado.
+* **Data Storage**: In local SQLite mode, the database file resides at `~/Documentos/Monitor/monitor_logs.db`. In PostgreSQL mode, data resides on the configured database server.
 
 ---
 
-## 📜 Licença & Direitos Autorais
+## 📜 License & Copyright
 
-Este software é licenciado sob a **GNU Affero General Public License (AGPL) v3.0**.  
-Copyright © 2026 Gabriel Moraes - Noxfort Systems. Todos os direitos reservados.
+This software is licensed under the **GNU Affero General Public License (AGPL) v3.0**.  
+Copyright © 2026 Gabriel Moraes - Noxfort Systems. All rights reserved.

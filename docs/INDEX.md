@@ -1,10 +1,10 @@
-# 📚 Central de Documentação Técnica: Noxfort Monitor™
+# 📚 Technical Documentation Hub: Noxfort Monitor™
 
-Bem-vindo ao centro de documentação técnica do **Noxfort Monitor™ v2.0**. Esta biblioteca foi organizada no modelo de **Grafo de Conhecimento (estilo Obsidian / GitHub)**, onde cada documento é modular, aprofundado e amplamente interconectado através de links bidirecionais.
+Welcome to the technical documentation center for **Noxfort Monitor™ v2.0**. This library is organized around a **Knowledge Graph model (Obsidian / GitHub style)**, where each document is modular, in-depth, and comprehensively interconnected via bidirectional links.
 
 ---
 
-## 🧭 Mapa de Conteúdo (Knowledge Graph / MOC)
+## 🧭 Content Map (Knowledge Graph / MOC)
 
 ```mermaid
 graph TD
@@ -32,68 +32,68 @@ graph TD
 
 ---
 
-## 🗂️ Diretório de Guias Técnicos
+## 🗂️ Technical Guides Directory
 
-### 1. Núcleo & Arquitetura
-* 🏗️ **[Arquitetura do Sistema](../ARCHITECTURE.md)**: Visão macro da arquitetura orientada a eventos (EDA), injeção de dependências no `cmd/server/main.go`, modelo de concorrência por goroutines e camadas SOLID.
-* 📖 **[Visão Geral do Projeto (README)](../README.md)**: Resumo executivo, recursos principais, instalação rápida e licenciamento AGPL v3.
-* 🤝 **[Guia de Contribuição](../CONTRIBUTING.md)**: Padrões de código Go, fluxo de pull requests e diretrizes arquiteturais.
+### 1. Core & Architecture
+* 🏗️ **[System Architecture](../ARCHITECTURE.md)**: Macro view of the Event-Driven Architecture (EDA), dependency injection in `cmd/server/main.go`, goroutine concurrency model, and SOLID layers.
+* 📖 **[Project Overview (README)](../README.md)**: Executive summary, key features, quickstart setup, and AGPL v3 licensing.
+* 🤝 **[Contributing Guide](../CONTRIBUTING.md)**: Go code standards, pull request workflow, and architectural rules.
 
-### 2. Protocolos & Integração Externa
-* 📡 **[Referência Completa de APIs & Protocolos](API_REFERENCE.md)**:
-  * Ingestão MQTT via broker nativo.
-  * Ingestão HTTP REST via `POST /api/telemetry`.
-  * Todas as rotas de Autenticação, Usuários, Túnel, Banco de Dados e Auditoria.
-* 🌐 **[Acesso Remoto & Túnel Ngrok](REMOTE_ACCESS.md)**:
-  * Arquitetura do túnel reverso para atravessar firewalls e CGNAT industriais.
-  * Ingestão WAN para agentes remotos (Synapse, Carina, nós de borda).
-  * Configuração de domínio estático e auto-start no boot.
+### 2. Protocols & External Integration
+* 📡 **[Complete API & Protocol Reference](API_REFERENCE.md)**:
+  * MQTT ingestion via the native broker.
+  * HTTP REST ingestion via `POST /api/telemetry`.
+  * All routes for Authentication, Users, Tunnel, Database, and Audit.
+* 🌐 **[Remote Access & Ngrok Tunnel](REMOTE_ACCESS.md)**:
+  * Reverse tunnel architecture for traversing industrial firewalls and CGNAT.
+  * WAN ingestion for remote agents (Synapse, Carina, edge nodes).
+  * Static domain configuration and automatic startup at boot.
 
-### 3. Persistência & Armazenamento
-* 🗄️ **[Banco de Dados & Persistência Dual-Engine](DATABASE.md)**:
-  * Coexistência e alternância dinâmica entre **PostgreSQL** e **SQLite**.
-  * Hot-Reload de repositórios a quente via `DBManager` sem derrubar serviços.
-  * Migrador automático de dados heterogêneos (`MigrateData`).
-  * Provisionamento seguro de schemas e usuários no PostgreSQL.
-  * O adaptador de dialetos SQL em tempo de execução (`QueryAdapter`).
+### 3. Persistence & Storage
+* 🗄️ **[Database & Dual-Engine Persistence](DATABASE.md)**:
+  * Coexistence and dynamic runtime switching between **PostgreSQL** and **SQLite**.
+  * Live repository hot-reloading via `DBManager` without dropping connections.
+  * Automatic heterogeneous data migrator (`MigrateData`).
+  * Secure schema and user provisioning in PostgreSQL.
+  * Runtime SQL dialect adapter (`QueryAdapter`).
 
-### 4. Segurança & Governança
-* 🔐 **[Segurança, Autenticação & RBAC](SECURITY.md)**:
-  * Papéis de acesso (`RoleAdmin` vs `RoleOperator`).
-  * Ciclo de vida do cookie de sessão `noxfort_session` e suporte a tokens via cabeçalho.
-  * Criptografia de senhas com salt aleatório seguro.
-  * Bootstrap idempotente do superusuário no boot via variáveis de ambiente.
-  * O `AuthMiddleware` e interceptação inteligente (303 vs 401).
-* 🔍 **[Trilha de Auditoria & Observabilidade](AUDIT_TRAIL.md)**:
-  * Rastreabilidade de segurança (`SecurityAuditLog`).
-  * Verificação de entrega de alertas e SLA (`AlertDispatchLog`).
-  * Monitoramento de disponibilidade e cálculo de downtime (`DeviceStateTransition`).
+### 4. Security & Governance
+* 🔐 **[Security, Authentication & RBAC](SECURITY.md)**:
+  * Access roles (`RoleAdmin` vs `RoleOperator`).
+  * Session cookie lifecycle for `noxfort_session` and header-based token support.
+  * Salted password hashing.
+  * Idempotent superuser bootstrapping at boot via environment variables.
+  * `AuthMiddleware` and smart interception (303 redirect vs 401 Unauthorized).
+* 🔍 **[Audit Trail & Observability](AUDIT_TRAIL.md)**:
+  * Security access traceability (`SecurityAuditLog`).
+  * Alert delivery verification and SLA tracking (`AlertDispatchLog`).
+  * Availability monitoring and downtime calculation (`DeviceStateTransition`).
 
-### 5. Interface Gráfica & Empacotamento
-* 🖥️ **[Aplicação Desktop & Operação](DESKTOP_APP.md)**:
-  * Arquitetura Wails v2 + WebKitGTK para Linux.
-  * Trava de instância única via socket IPC Unix (`desktop.TryActivateExisting`).
-  * Bandeja do sistema (`internal/tray`), minimização ao fechar e graceful shutdown.
-  * Modo **Headless** (`--headless` / `--server-only`) para servidores sem tela.
-  * Empacotamento e distribuição via instalador Debian (`.deb`).
+### 5. Desktop Application & Packaging
+* 🖥️ **[Desktop Application & Operations](DESKTOP_APP.md)**:
+  * Wails v2 + WebKitGTK architecture for Linux.
+  * Single-instance lock via Unix IPC socket (`desktop.TryActivateExisting`).
+  * System tray (`internal/tray`), minimize-on-close, and graceful shutdown.
+  * **Headless** server mode (`--headless` / `--server-only`) for screenless environments.
+  * Packaging and distribution via Debian installer (`.deb`).
 
-### 6. Engenharia, Testes & Operações
-* 🚀 **[Guia de Implantação em Produção](DEPLOYMENT.md)**:
-  * Serviço systemd configurado em modo headless.
-  * Instalação direta via pacote `.deb`.
-  * Configuração de proxy reverso com NGINX e certificados SSL.
-* 👨‍💻 **[Guia do Desenvolvedor](DEVELOPER_GUIDES.md)**:
-  * Configuração do ambiente local (Go 1.22+, `libwebkit2gtk-4.1-dev`).
-  * Injeção de dependências, extensões de canais e adição de novas entidades.
-* 🧪 **[Testes & Garantia de Qualidade (QA)](TESTING.md)**:
-  * Execução de testes unitários com mocks de repositório.
-  * Testes manuais E2E com `mosquitto_pub` e `curl`.
-  * Diagnóstico de canais de notificação (SMTP e Telegram).
-* 🔬 **[Notas de Pesquisa & Decisões Técnicas](RESEARCH_NOTES.md)**:
-  * Histórico de decisões: eliminação de CGO, migração para Wails v2 e clustering futuro com gRPC.
+### 6. Engineering, Testing & Operations
+* 🚀 **[Production Deployment Guide](DEPLOYMENT.md)**:
+  * Systemd service configured in headless mode.
+  * Direct installation via `.deb` package.
+  * NGINX reverse proxy configuration with SSL termination.
+* 👨‍💻 **[Developer Guide](DEVELOPER_GUIDES.md)**:
+  * Local environment configuration (Go 1.22+, `libwebkit2gtk-4.1-dev`).
+  * Dependency injection, channel extensions, and adding new entities.
+* 🧪 **[Testing & Quality Assurance (QA)](TESTING.md)**:
+  * Running unit tests with repository mocks.
+  * Manual E2E testing with `mosquitto_pub` and `curl`.
+  * Notification channel diagnostics (SMTP and Telegram).
+* 🔬 **[Research Notes & Technical Decisions](RESEARCH_NOTES.md)**:
+  * Decision log: CGO elimination, migration to Wails v2, and future clustering with gRPC.
 
 ---
 
-### 🔗 Dicas de Navegação
-* **No GitHub**: Todos os links acima utilizam caminhos relativos padrão e funcionam de forma nativa na interface web.
-* **No Obsidian**: Esta pasta `docs/` pode ser aberta como um cofre (*vault*) ou visualizada como uma pasta de notas; o gráfico (*Graph View*) revelará a interconexão completa do ecossistema.
+### 🔗 Navigation Tips
+* **On GitHub**: All links above use standard relative paths and work seamlessly in the web interface.
+* **In Obsidian**: This `docs/` folder can be opened as a vault or viewed as a notes folder; the Graph View will reveal the full interconnection of the ecosystem.

@@ -1,63 +1,63 @@
-[📚 Central de Documentação](docs/INDEX.md) > **Guia de Contribuição**
+[📚 Documentation Hub](docs/INDEX.md) > **Contributing Guide**
 
 ---
 
-# 🤝 Contribuindo para o Noxfort Monitor™
+# 🤝 Contributing to Noxfort Monitor™
 
-Agradecemos o seu interesse em contribuir para o **Noxfort Monitor™**. Este projeto é mantido com altos padrões de integridade arquitetural, princípios **SOLID** e cobertura de testes automatizados.
-
----
-
-## 1. Código de Conduta
-
-Ao participar deste projeto, espera-se que todos os contribuidores tratem a comunidade com respeito, mantenham uma comunicação profissional e construtiva, e zelem pela qualidade e segurança do código.
+Thank you for your interest in contributing to **Noxfort Monitor™**. This project is maintained with high standards of architectural integrity, **SOLID** principles, and automated test coverage.
 
 ---
 
-## 2. Como Posso Contribuir?
+## 1. Code of Conduct
 
-### 2.1 Reportando Bugs
-* **Pesquise nas issues**: Verifique se o problema já foi reportado anteriormente.
-* **Informações do Ambiente**: Sempre forneça a versão do Go (`go version`), distribuição Linux (`lsb_release -a`), versão do Mosquitto e se o bug ocorre em modo Desktop (Wails) ou modo Headless (`--headless`).
-* **Logs Relevantes**: Anexe os logs do console ou execute com `journalctl -u noxfort-monitor -f`.
+When participating in this project, all contributors are expected to treat the community with respect, maintain professional and constructive communication, and uphold code quality and security.
 
-### 2.2 Sugerindo Melhorias & Novas Funcionalidades
-* Abra uma issue descrevendo o caso de uso industrial.
-* Se a melhoria envolver novas tabelas ou bancos, consulte [Banco de Dados & Persistência](docs/DATABASE.md).
-* Se a melhoria envolver novas rotas de comunicação, consulte [Referência de APIs](docs/API_REFERENCE.md).
+---
 
-### 2.3 Enviando Pull Requests (PR)
-1. Crie um fork do repositório e ramifique a partir da branch `main`.
-   * Nomenclatura sugerida: `feature/sua-feature` ou `bugfix/numero-da-issue`.
-2. Garanta que o código esteja formatado segundo o padrão oficial do Go:
+## 2. How Can I Contribute?
+
+### 2.1 Reporting Bugs
+* **Search Existing Issues**: Check whether the issue has already been reported.
+* **Environment Details**: Always provide the Go version (`go version`), Linux distribution (`lsb_release -a`), Mosquitto version, and whether the bug occurs in Desktop mode (Wails) or Headless mode (`--headless`).
+* **Relevant Logs**: Attach console logs or execute `journalctl -u noxfort-monitor -f`.
+
+### 2.2 Suggesting Improvements & New Features
+* Open an issue describing the industrial use case.
+* If the improvement involves new database tables or drivers, refer to [Database & Persistence](docs/DATABASE.md).
+* If the improvement introduces new communication endpoints, refer to [API Reference](docs/API_REFERENCE.md).
+
+### 2.3 Submitting Pull Requests (PR)
+1. Fork the repository and branch from `main`.
+   * Suggested naming: `feature/your-feature-name` or `bugfix/issue-number`.
+2. Ensure code is formatted according to official Go standards:
    ```bash
    go fmt ./...
    ```
-3. Execute e garanta que toda a suíte de testes passe com sucesso:
+3. Run and ensure the entire test suite passes:
    ```bash
    make test
    ```
-4. Se você adicionou novas funcionalidades, adicione os respectivos testes unitários em `*_test.go` utilizando mocks de repositório.
-5. Mantenha a documentação sincronizada: se você alterou parâmetros de banco, flags ou rotas REST, atualize os documentos correspondentes em `docs/`.
+4. If you added new features, add corresponding unit tests in `*_test.go` using repository mocks.
+5. Keep documentation synchronized: if you changed database parameters, flags, or REST routes, update the relevant documents in `docs/`.
 
 ---
 
-## 3. Diretrizes de Engenharia e Arquitetura
+## 3. Engineering & Architectural Guidelines
 
-Para manter a consistência da base de código, exigimos o cumprimento rigoroso dos seguintes padrões:
+To maintain codebase consistency, strict compliance with the following standards is required:
 
-* **Zero Variáveis Globais**: Dependências devem sempre ser passadas através dos construtores (`New...`) na raiz de composição ([`cmd/server/main.go`](cmd/server/main.go)).
-* **Dependência em Abstrações**: O núcleo do sistema (`internal/monitor`, `internal/security`) deve depender apenas de interfaces declaradas em [`internal/domain`](internal/domain), nunca de implementações concretas de banco de dados ou rede.
-* **Compatibilidade Dual-Engine**: Qualquer nova query SQL deve utilizar o [`storage.AdaptQuery`](docs/DATABASE.md) para garantir que funcione de forma transparente tanto em SQLite quanto em PostgreSQL.
-* **Isolamento de Segurança**: Hashes de senha e tokens nunca devem ser expostos em JSON ou logs abertos.
+* **Zero Global Variables**: Dependencies must always be injected via constructors (`New...`) at the composition root ([`cmd/server/main.go`](cmd/server/main.go)).
+* **Depend on Abstractions**: Core system logic (`internal/monitor`, `internal/security`) must only depend on interfaces declared in [`internal/domain`](internal/domain), never on concrete database or network implementations.
+* **Dual-Engine Compatibility**: Any new SQL query must use [`storage.AdaptQuery`](docs/DATABASE.md) to ensure transparent operation across both SQLite and PostgreSQL.
+* **Security Isolation**: Password hashes and tokens must never be exposed in JSON payloads or plaintext logs.
 
-Consulte o **[Guia Avançado do Desenvolvedor](docs/DEVELOPER_GUIDES.md)** para instruções detalhadas de desenvolvimento e arquitetura.
+Refer to the **[Advanced Developer Guide](docs/DEVELOPER_GUIDES.md)** for detailed development and architectural instructions.
 
 ---
 
-### 🔗 Documentos Relacionados
-* 🏗️ [Arquitetura Geral](ARCHITECTURE.md) — Macro-estrutura do sistema
-* 👨‍💻 [Guia do Desenvolvedor](docs/DEVELOPER_GUIDES.md) — Configuração do ambiente local
-* 🧪 [Guia de Testes](docs/TESTING.md) — Execução de testes unitários e manuais
-* 🔐 [Segurança e RBAC](docs/SECURITY.md) — Padrões de autenticação e proteção de rotas
-* 🧭 [Central de Documentação](docs/INDEX.md) — Mapa de conteúdo completo
+### 🔗 Related Documentation
+* 🏗️ [System Architecture](ARCHITECTURE.md) — Macro-level system structure
+* 👨‍💻 [Developer Guide](docs/DEVELOPER_GUIDES.md) — Local environment configuration
+* 🧪 [Testing Guide](docs/TESTING.md) — Running unit and manual tests
+* 🔐 [Security & RBAC](docs/SECURITY.md) — Authentication standards and route protection
+* 🧭 [Documentation Hub](docs/INDEX.md) — Comprehensive content map

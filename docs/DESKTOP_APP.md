@@ -1,121 +1,121 @@
-[📚 Central de Documentação](INDEX.md) > **Aplicação Desktop & Operação**
+[📚 Documentation Hub](INDEX.md) > **Desktop Application & Operations**
 
 ---
 
-# 🖥️ Aplicação Desktop & Operação: Noxfort Monitor™
+# 🖥️ Desktop Application & Operations: Noxfort Monitor™
 
-Este documento detalha a arquitetura da interface desktop nativa do **Noxfort Monitor™ v2.0** construída com **Wails v2**, a integração com **WebKitGTK**, o sistema de **Instância Única (Single-Instance)**, a **Bandeja do Sistema (Systray)**, o modo **Headless** para servidores e o fluxo de geração do pacote de instalação **Debian (`.deb`)**.
+This document details the native desktop architecture of **Noxfort Monitor™ v2.0** built with **Wails v2**, its integration with **WebKitGTK**, the **Single-Instance** lock mechanism, the **System Tray (Systray)** lifecycle, **Headless** server mode, and the **Debian package (`.deb`)** generation pipeline.
 
 ---
 
-## 1. Visão Geral da Interface Desktop
+## 1. Desktop Interface Overview
 
-O Noxfort Monitor combina a agilidade do desenvolvimento web com o desempenho e a integração nativa de um binário Go compilado. Em vez de depender de navegadores externos pesados (como Chromium ou Electron), o sistema utiliza **Wails v2** com **WebKitGTK** nativo do Linux.
+Noxfort Monitor combines the rapid iteration of web frontend technologies with the high performance and native integration of a compiled Go application. Rather than relying on resource-heavy browser runtimes (such as Chromium or Electron), the system leverages **Wails v2** with Linux-native **WebKitGTK**.
 
 ```mermaid
 graph TD
-    subgraph "Processo Central Noxfort Monitor"
+    subgraph "Noxfort Monitor Core Process"
         Main[cmd/server/main.go]
-        HTTP[Servidor HTTP Local :8080]
-        IPC[Servidor Single-Instance Socket]
-        Tray[internal/tray - Systray GTK]
+        HTTP[Local HTTP Server :8080]
+        IPC[Single-Instance Socket Server]
+        Tray[internal/tray - GTK Systray]
         
-        subgraph "Runtime Wails v2"
+        subgraph "Wails v2 Runtime"
             WailsApp[desktop.App]
-            WebKit[Janela WebKitGTK]
+            WebKit[WebKitGTK Window]
             SessionBridge[desktopResponseWriter - Cookie Sync]
         end
     end
 
-    Main -->|Modo Desktop Padrão| WailsApp
+    Main -->|Standard Desktop Mode| WailsApp
     WailsApp --> WebKit
     WebKit -->|Custom AssetServer| SessionBridge
     SessionBridge --> HTTP
     WailsApp -->|Callbacks| Tray
-    Main -->|Modo --headless| HTTP
+    Main -->|--headless Mode| HTTP
 ```
 
-### Características Técnicas:
-* **Dimensões Padrão**: 1280x800 px (mínimo: 1024x600 px).
-* **Política de GPU**: `linux.WebviewGpuPolicyOnDemand` para máxima economia de energia em estações industriais.
-* **Minimizar ao Fechar**: `HideWindowOnClose: true`. Clicar no botão "X" da janela não encerra o servidor, apenas oculta a interface gráfica para a bandeja do sistema.
+### Technical Specifications:
+* **Default Dimensions**: 1280x800 px (minimum: 1024x600 px).
+* **GPU Policy**: `linux.WebviewGpuPolicyOnDemand` for optimal energy efficiency on industrial workstations.
+* **Minimize on Close**: `HideWindowOnClose: true`. Clicking the window close button ("X") does not terminate the backend server; it hides the GUI to the system tray.
 
 ---
 
-## 2. Controle de Instância Única (Single-Instance Lock)
+## 2. Single-Instance Enforcement (IPC Lock)
 
-Para evitar conflitos de portas de rede (MQTT `:1883`, HTTP `:8080`) e duplicação de instâncias no mesmo computador, o Monitor possui um sistema duplo de trava:
+To avoid network port collisions (MQTT `:1883`, HTTP `:8080`) and duplicated processes on the same host, Monitor uses a dual locking mechanism:
 
-1. **Socket IPC Unix ([`internal/desktop/singleinstance.go`](../internal/desktop/singleinstance.go))**:
-   - Antes de iniciar a interface gráfica, a função `desktop.TryActivateExisting()` tenta conectar a um socket Unix local (`/tmp/noxfort-monitor-singleinstance.sock`).
-   - Se uma instância já estiver aberta, a nova instância envia uma mensagem de ativação ("`ACTIVATE`") e se encerra imediatamente com status `0`.
-   - A instância em execução recebe o sinal no socket, traz sua janela para o primeiro plano e restaura o estado minimizado através de `desktopApp.RestoreWindow()`.
+1. **Unix IPC Socket ([`internal/desktop/singleinstance.go`](../internal/desktop/singleinstance.go))**:
+   - Before initializing the graphical UI, `desktop.TryActivateExisting()` attempts to connect to a local Unix domain socket (`/tmp/noxfort-monitor-singleinstance.sock`).
+   - If an existing instance is running, the new process sends an activation command ("`ACTIVATE`") and exits cleanly with exit code `0`.
+   - The active running instance receives the signal over the socket, un-minimizes its window, and brings it to the foreground via `desktopApp.RestoreWindow()`.
 2. **Wails SingleInstanceLock**:
-   - Uma camada secundária no runtime Wails garante integridade idêntica para o toolkit gráfico.
+   - A secondary protection layer in the Wails runtime provides identical enforcement across window managers.
 
 ---
 
-## 3. Integração com a Bandeja do Sistema (Systray)
+## 3. System Tray (Systray) Integration
 
-O pacote [`internal/tray/tray.go`](../internal/tray/tray.go) integra-se diretamente ao loop de eventos do desktop através de `tray.Register()`:
-* **Ícone Embutido**: O ícone oficial da Noxfort é compilado diretamente no executável Go via `//go:embed icon.png`.
-* **Menu de Contexto**:
-  * **Abrir Interface**: Restaura a janela gráfica e traz para o topo da área de trabalho.
-  * **Encerrar / Sair**: Executa o encerramento gracioso (*graceful shutdown*), parando o Watchdog Engine, desconectando o broker MQTT, fechando o túnel Ngrok e liberando o banco de dados.
+The [`internal/tray/tray.go`](../internal/tray/tray.go) package integrates directly into the desktop event loop via `tray.Register()`:
+* **Embedded Asset**: The official Noxfort icon is compiled into the Go binary via `//go:embed icon.png`.
+* **Context Menu**:
+  * **Open Dashboard**: Restores the graphical window and brings it to the top of the desktop workspace.
+  * **Shutdown / Quit**: Triggers a clean graceful shutdown, stopping the Watchdog Engine, disconnecting from the MQTT broker, terminating the Ngrok tunnel, and releasing database connections.
 
 ---
 
-## 4. Modo Headless (Servidor / Daemon)
+## 4. Headless Server Mode (Daemon)
 
-Em servidores de produção, contêineres Docker ou ambientes de nuvem sem servidor gráfico (sem X11 ou Wayland), tentar abrir janelas WebKit causará falha de inicialização (`cannot open display`).
+On production servers, Docker containers, or cloud environments without an active display server (no X11 or Wayland), attempting to launch WebKit windows will result in an initialization error (`cannot open display`).
 
-Para rodar exclusivamente como servidor de segundo plano, execute com a flag:
+To run exclusively as a background daemon, supply the headless flag:
 
 ```bash
-# Via binário compilado:
+# Via compiled binary:
 ./bin/noxfort-monitor --headless
 
-# Ou utilizando o alias:
+# Or using the alias:
 ./bin/noxfort-monitor --server-only
 
 # Via Makefile:
 make run-headless
 ```
 
-### O que o Modo Headless Faz:
-1. Desativa a inicialização do Wails v2 e do WebKitGTK.
-2. Desativa o servidor de socket IPC de janela.
-3. Inicia o servidor HTTP, o cliente MQTT, o Watchdog Engine e o túnel Ngrok normalmente.
-4. Aguarda sinais de terminação do sistema operacional (`SIGINT`, `SIGTERM`) para encerramento gracioso.
+### What Headless Mode Does:
+1. Disables Wails v2 and WebKitGTK window initialization.
+2. Disables the IPC window activation socket server.
+3. Initializes the HTTP server, MQTT client, Watchdog Engine, and Ngrok tunnel normally.
+4. Listens for standard OS termination signals (`SIGINT`, `SIGTERM`) to perform a graceful shutdown.
 
 ---
 
-## 5. Empacotamento Debian (`.deb`)
+## 5. Debian Packaging (`.deb`)
 
-O repositório inclui automação completa para gerar pacotes de distribuição para Ubuntu / Debian através do script [`build_installer.sh`](../build_installer.sh) ou pelo comando:
+The repository includes automated scripts to package releases for Ubuntu / Debian via [`build_installer.sh`](../build_installer.sh) or the Makefile:
 
 ```bash
 make deb
 ```
 
-### O que o Instalador Gera:
-1. **Compilação Otimizada**: Constrói o binário com tags `-tags "production,webkit2_41"` e flags `-ldflags="-s -w"` (stripping de símbolos de debug para reduzir tamanho).
-2. **Ícones Multi-Resolução**: Gera ícones hicolor de 16x16 até 512x512 em `/usr/share/icons/hicolor/`.
-3. **Instalação em `/opt`**: Copia o binário e templates web para `/opt/noxfort-monitor/`.
-4. **Links Simbólicos**: Cria `/usr/local/bin/noxfort-monitor`.
-5. **Integração no Menu do Sistema**: Instala `noxfort-monitor.desktop` no menu de aplicativos do GNOME/KDE.
-6. **Autostart no Login**: Adiciona atalho em `/etc/xdg/autostart/` para inicialização automática no logon do usuário.
-7. **Dependências do Sistema Declaradas**:
+### What the Installer Bundles:
+1. **Optimized Build**: Compiles the binary with `-tags "production,webkit2_41"` and `-ldflags="-s -w"` (stripping debug symbols to reduce binary size).
+2. **Multi-Resolution Icons**: Installs hicolor icons from 16x16 up to 512x512 into `/usr/share/icons/hicolor/`.
+3. **Installation in `/opt`**: Copies the binary and web templates into `/opt/noxfort-monitor/`.
+4. **Symlink Generation**: Links `/usr/local/bin/noxfort-monitor`.
+5. **Desktop Menu Integration**: Installs `noxfort-monitor.desktop` into GNOME/KDE application menus.
+6. **Autostart on Login**: Places an entry in `/etc/xdg/autostart/` for automated startup upon user logon.
+7. **Declared System Dependencies**:
    ```control
    Depends: mosquitto, libayatana-appindicator3-1 | libappindicator3-1, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37, libgtk-3-0
    ```
-8. **Scripts de Pós-Instalação**: Habilita e inicializa o serviço `mosquitto` automaticamente via systemd.
+8. **Post-Installation Scripts**: Enables and starts the `mosquitto` systemd service automatically.
 
 ---
 
-### 🔗 Documentos Relacionados
-* 🏗️ [Arquitetura Geral](../ARCHITECTURE.md) — Modelo de concorrência e inicialização
-* 🚀 [Guia de Implantação](DEPLOYMENT.md) — Configuração do serviço systemd headless
-* 👨‍💻 [Guia de Desenvolvimento](DEVELOPER_GUIDES.md) — Dependências de compilação C/GTK
-* 🔐 [Segurança e Sessões](SECURITY.md) — Sincronização de cookies na Webview
-* 🌐 [Acesso Remoto](REMOTE_ACCESS.md) — Túnel Ngrok integrado à UI
+### 🔗 Related Documentation
+* 🏗️ [System Architecture](../ARCHITECTURE.md) — Concurrency model and startup flow
+* 🚀 [Deployment Guide](DEPLOYMENT.md) — Headless systemd service configuration
+* 👨‍💻 [Developer Guide](DEVELOPER_GUIDES.md) — C/GTK compilation dependencies
+* 🔐 [Security & Sessions](SECURITY.md) — Webview cookie synchronization
+* 🌐 [Remote Access](REMOTE_ACCESS.md) — Ngrok tunnel integration with the UI

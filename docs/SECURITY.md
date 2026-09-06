@@ -1,127 +1,127 @@
-[📚 Central de Documentação](INDEX.md) > **Segurança, Autenticação & RBAC**
+[📚 Documentation Hub](INDEX.md) > **Security, Authentication & RBAC**
 
 ---
 
-# 🔐 Segurança, Autenticação & RBAC: Noxfort Monitor™
+# 🔐 Security, Authentication & RBAC: Noxfort Monitor™
 
-Este documento detalha o subsistema de segurança, autenticação de operadores, controle de acesso baseado em papéis (**RBAC**), gestão de sessões e bootstrap de superusuário do **Noxfort Monitor™ v2.0**.
+This document details the security architecture, operator authentication, Role-Based Access Control (**RBAC**), session management, and superuser bootstrap mechanisms in **Noxfort Monitor™ v2.0**.
 
 ---
 
-## 1. Modelo de Controle de Acesso (RBAC)
+## 1. Access Control Model (RBAC)
 
-O Noxfort Monitor implementa controle de acesso rigoroso para garantir que apenas pessoal autorizado possa alterar parâmetros de alerta, cadastrar sistemas ou manipular o banco de dados.
+Noxfort Monitor enforces strict access control to ensure that only authorized personnel can alter alert routing, register devices, or modify persistence layers.
 
-### Papéis Disponíveis ([`internal/domain/user.go`](../internal/domain/user.go))
+### Available Roles ([`internal/domain/user.go`](../internal/domain/user.go))
 
-| Papel | Identificador | Permissões e Escopo |
+| Role | Identifier | Permissions and Scope |
 | :--- | :--- | :--- |
-| **Administrador** | `ADMIN` | **Acesso Total**. Gerencia usuários, configurações globais (SMTP, Telegram, Ngrok), chaveamento e migração de banco de dados, visualização de auditoria e exclusão de dispositivos. |
-| **Operador** | `OPERATOR` | **Acesso Operacional**. Visualiza o Dashboard em tempo real, gerencia dispositivos e contatos de resposta a incidentes, sem permissão para alterar credenciais de banco ou criar outros administradores. |
+| **Administrator** | `ADMIN` | **Full Access**. Manages users, global settings (SMTP, Telegram, Ngrok), database switching and data migration, audit trail inspection, and device deletion. |
+| **Operator** | `OPERATOR` | **Operational Access**. Views real-time dashboards, manages devices, and incident contacts, without permissions to change database credentials or create other administrators. |
 
 ---
 
-## 2. Ciclo de Vida de Sessões & Autenticação
+## 2. Session Lifecycle & Authentication
 
-A autenticação é orquestrada pelo [`SecurityManager`](../internal/security/security_manager.go) e pelo [`SessionManager`](../internal/security/session.go):
+Authentication is orchestrated by [`SecurityManager`](../internal/security/security_manager.go) and [`SessionManager`](../internal/security/session.go):
 
 ```mermaid
 sequenceDiagram
-    actor Operador
+    actor Operator
     participant Web as Browser / Wails Webview
     participant MW as AuthMiddleware
     participant Sec as SecurityManager
     participant DB as UserRepository
 
-    Operador->>Web: Informa Usuário e Senha (/login)
+    Operator->>Web: Submits Username and Password (/login)
     Web->>Sec: POST /api/auth/login
-    Sec->>DB: Busca usuário por username
-    DB-->>Sec: Retorna hash da senha
-    Sec->>Sec: Valida hash criptográfico (hasher.go)
-    Sec->>Sec: Gera Token Criptográfico (32 bytes hex)
-    Sec-->>Web: Define Cookie 'noxfort_session' (HttpOnly, SameSite=Lax)
+    Sec->>DB: Look up user by username
+    DB-->>Sec: Return password hash
+    Sec->>Sec: Validate cryptographic hash (hasher.go)
+    Sec->>Sec: Generate cryptographic token (32 bytes hex)
+    Sec-->>Web: Set Cookie 'noxfort_session' (HttpOnly, SameSite=Lax)
     
-    Note over Web,MW: Próximas Requisições Protegidas
-    Web->>MW: GET /devices (com cookie 'noxfort_session')
+    Note over Web,MW: Subsequent Protected Requests
+    Web->>MW: GET /devices (with 'noxfort_session' cookie)
     MW->>Sec: ValidateSession(token)
-    Sec-->>MW: Retorna (username, role, valid=true)
-    MW-->>Web: Renderiza página autorizada
+    Sec-->>MW: Return (username, role, valid=true)
+    MW-->>Web: Render authorized page
 ```
 
-### 2.1 Armazenamento e Transmissão de Tokens
-* **Cookie Seguro**: O token de sessão é trafegado sob o nome `noxfort_session`, configurado com `HttpOnly: true`, `Path: "/"` e `SameSite: Lax`.
-* **Suporte a Cabeçalho**: APIs programáticas e integrações podem enviar o token via cabeçalho HTTP:
+### 2.1 Token Storage & Transmission
+* **Secure Cookie**: The session token is transported via the `noxfort_session` cookie, configured with `HttpOnly: true`, `Path: "/"`, and `SameSite: Lax`.
+* **Header Support**: Programmatic APIs and integrations can transmit the token via standard HTTP headers:
   ```http
-  Authorization: Bearer <token_de_sessao>
+  Authorization: Bearer <session_token>
   ```
-  ou via cabeçalho customizado `X-Session-Token: <token_de_sessao>`.
-* **Sincronização no Desktop (Wails)**: Em ambientes Linux com WebKitGTK onde requisições via esquema de URI personalizado (`wails://`) podem não persistir cookies nativos automaticamente, o [`desktopResponseWriter`](../internal/desktop/app.go) intercepta os cabeçalhos de resposta `Set-Cookie` e sincroniza o token diretamente na memória da aplicação desktop.
+  or via the custom header `X-Session-Token: <session_token>`.
+* **Desktop Synchronization (Wails)**: In Linux WebKitGTK environments where requests over custom URI schemes (`wails://`) may not persist native browser cookies automatically, [`desktopResponseWriter`](../internal/desktop/app.go) intercepts `Set-Cookie` response headers and synchronizes the token directly into desktop application memory.
 
 ---
 
-## 3. Criptografia & Armazenamento de Senhas
+## 3. Cryptography & Password Storage
 
-O módulo [`internal/security/hasher.go`](../internal/security/hasher.go) isola as funções de derivação de chaves criptográficas:
-* **Salt Criptográfico Aleatório**: Cada senha gerada recebe um salt exclusivo gerado via `crypto/rand`.
-* **Armazenamento Protegido**: O hash resultante armazena o formato do algoritmo, custo, salt e hash final codificados em Base64 seguro.
-* **Omissão em Serialização**: A entidade [`domain.User`](../internal/domain/user.go) possui a tag `json:"-"` no campo `PasswordHash`, garantindo que hashes de senha **nunca sejam expostos** em nenhuma resposta JSON da API.
+The [`internal/security/hasher.go`](../internal/security/hasher.go) module encapsulates cryptographic key derivation:
+* **Random Cryptographic Salt**: Every password generated receives an exclusive salt via `crypto/rand`.
+* **Protected Storage**: The resulting hash stores algorithm identifiers, cost, salt, and final hash encoded in secure Base64.
+* **Serialization Safety**: The [`domain.User`](../internal/domain/user.go) entity defines `json:"-"` on the `PasswordHash` field, guaranteeing password hashes are **never exposed** in any API JSON responses.
 
 ---
 
-## 4. Bootstrap Automático do Superusuário (`EnsureSuperuser`)
+## 4. Automatic Superuser Bootstrapping (`EnsureSuperuser`)
 
-Para simplificar a implantação inicial sem comprometer a segurança, o sistema executa na inicialização ([`internal/security/superuser.go`](../internal/security/superuser.go)) o provisionamento idempotente da conta de administração:
+To streamline initial deployments without compromising security, the system executes idempotent administrative account bootstrapping at startup ([`internal/security/superuser.go`](../internal/security/superuser.go)):
 
-1. O sistema lê as variáveis de ambiente:
-   * `MONITOR_ADMIN_USER` (padrão de desenvolvimento: `admin`)
-   * `MONITOR_ADMIN_PASSWORD` (padrão de desenvolvimento: `admin`)
-2. Se nenhuma conta de administrador existir no banco selecionado (SQLite ou PostgreSQL), a conta é criada automaticamente com a role `ADMIN`.
-3. Se o banco já possuir administradores, o sistema não sobrescreve senhas existentes a menos que explicitamente configurado.
+1. The system inspects environment variables:
+   * `MONITOR_ADMIN_USER` (development default: `admin`)
+   * `MONITOR_ADMIN_PASSWORD` (development default: `admin`)
+2. If no administrative account exists in the active database (SQLite or PostgreSQL), the account is provisioned automatically with role `ADMIN`.
+3. If administrators already exist in the database, the system will not overwrite existing credentials unless explicitly configured.
 
 > [!WARNING]
-> **Aviso de Produção**: Em ambientes de produção, copie `.env.example` para `.env` e defina senhas complexas antes de expor o servidor à rede.
+> **Production Notice**: In production environments, copy `.env.example` to `.env` and configure strong credentials prior to exposing the server to the network.
 
 ---
 
-## 5. Middleware de Proteção HTTP (`AuthMiddleware`)
+## 5. HTTP Protection Middleware (`AuthMiddleware`)
 
-O [`AuthMiddleware`](../internal/transport/http/middleware.go) envolve a árvore de roteamento do servidor e intercepta todas as requisições:
+[`AuthMiddleware`](../internal/transport/http/middleware.go) wraps the server routing tree and intercepts all incoming requests:
 
 ```go
 func (m *AuthMiddleware) Wrap(next http.Handler) http.Handler
 ```
 
-### Regras de Interceptação:
-1. **Rotas Públicas Isentas**:
-   * Arquivos estáticos: `/static/*`
-   * Telas de autenticação: `/login`, `/register`, `/api/auth/login`, `/api/auth/register`, `/api/auth/status`
-   * **Endpoint de Ingestão de Telemetria**: `POST /api/telemetry` (isentado para permitir ingestão direta de sensores IoT e nós de borda autenticados por token de rede ou chave simétrica).
-2. **Requisições de Páginas Web Desautenticadas**:
-   * Requisições como `GET /`, `GET /devices` ou `GET /settings` sem sessão válida são redirecionadas com código HTTP `303 See Other` para a tela `/login`.
-3. **Requisições de API Desautenticadas**:
-   * Requisições como `GET /api/users` ou `POST /api/settings/database/save` sem sessão válida retornam imediatamente HTTP `401 Unauthorized` com corpo JSON:
+### Interception Rules:
+1. **Exempt Public Routes**:
+   * Static assets: `/static/*`
+   * Authentication endpoints: `/login`, `/register`, `/api/auth/login`, `/api/auth/register`, `/api/auth/status`
+   * **Telemetry Ingestion Endpoint**: `POST /api/telemetry` (exempt to facilitate direct ingestion from IoT sensors and edge field nodes).
+2. **Unauthenticated Web Page Requests**:
+   * Navigations such as `GET /`, `GET /devices`, or `GET /settings` without a valid session redirect with HTTP `303 See Other` to `/login`.
+3. **Unauthenticated API Requests**:
+   * Requests such as `GET /api/users` or `POST /api/settings/database/save` without a valid session immediately return HTTP `401 Unauthorized`:
      ```json
      {"error": "Unauthorized"}
      ```
-4. **Verificação de Privilégios (RBAC)**:
-   * Endpoints administrativos sensíveis (ex: `/api/users/create`, `/api/settings/database/provision-user`) exigem explicitamente `role == RoleAdmin`. Tentativas por operadores comuns retornam HTTP `403 Forbidden`.
+4. **Privilege Enforcement (RBAC)**:
+   * Sensitive administrative endpoints (e.g., `/api/users/create`, `/api/settings/database/provision-user`) strictly require `role == RoleAdmin`. Attempts by standard operators return HTTP `403 Forbidden`.
 
 ---
 
-## 6. Registro de Auditoria de Segurança
+## 6. Security Audit Logging
 
-Toda ação sensível de segurança é comunicada ao [`AuditRepository`](../internal/storage/audit_repo.go):
-* Tentativas de login (bem-sucedidas ou falhas com IP de origem).
-* Criação e remoção de usuários.
-* Alteração de credenciais e switches de persistência.
+All sensitive security actions are logged to [`AuditRepository`](../internal/storage/audit_repo.go):
+* Login attempts (successful logins and failures with client IP).
+* User account creation and removal.
+* Modification of notification credentials and persistence switching.
 
-Consulte o documento dedicado [Trilha de Auditoria](AUDIT_TRAIL.md) para detalhes dos modelos e eventos registrados.
+Refer to [Audit Trail](AUDIT_TRAIL.md) for full audit schema and event specifications.
 
 ---
 
-### 🔗 Documentos Relacionados
-* 🏗️ [Arquitetura Geral](../ARCHITECTURE.md) — Camadas de transporte e injeção de dependência
-* 🗄️ [Banco de Dados & Dual-Engine](DATABASE.md) — Tabelas de usuários e permissões no Postgres
-* 📡 [Referência de APIs](API_REFERENCE.md) — Rotas `/api/auth/*` e `/api/users/*`
-* 🔍 [Trilha de Auditoria](AUDIT_TRAIL.md) — Registros de segurança e logs de conformidade
-* 🚀 [Guia de Implantação](DEPLOYMENT.md) — Configuração segura de variáveis de ambiente e Nginx
+### 🔗 Related Documentation
+* 🏗️ [System Architecture](../ARCHITECTURE.md) — Transport layers and dependency injection
+* 🗄️ [Database & Dual-Engine](DATABASE.md) — User tables and PostgreSQL permissions
+* 📡 [API Reference](API_REFERENCE.md) — `/api/auth/*` and `/api/users/*` routes
+* 🔍 [Audit Trail](AUDIT_TRAIL.md) — Security logs and compliance records
+* 🚀 [Deployment Guide](DEPLOYMENT.md) — Secure environment variables and NGINX configuration

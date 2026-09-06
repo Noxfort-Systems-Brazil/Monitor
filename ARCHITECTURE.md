@@ -1,42 +1,42 @@
-[📚 Central de Documentação](docs/INDEX.md) > **Arquitetura Detalhada do Sistema**
+[📚 Documentation Hub](docs/INDEX.md) > **Detailed System Architecture**
 
 ---
 
-# 🏗️ Arquitetura Detalhada do Sistema: Noxfort Monitor™
+# 🏗️ Detailed System Architecture: Noxfort Monitor™
 
-Este documento fornece uma visão arquitetural aprofundada do **Noxfort Monitor™ v2.0**. Foi elaborado para engenheiros de software, arquitetos de sistemas e mantenedores que necessitam compreender a mecânica interna, padrões **SOLID**, modelos de concorrência e o fluxo de dados do sistema.
+This document provides an in-depth architectural overview of **Noxfort Monitor™ v2.0**. It is intended for software engineers, systems architects, and maintainers who need to understand the internal mechanics, **SOLID** patterns, concurrency models, and data flows of the system.
 
 ---
 
-## 1. Filosofia Arquitetural Macro
+## 1. Macro Architectural Philosophy
 
-O Noxfort Monitor adota uma **Arquitetura Orientada a Eventos (EDA)** estrita, combinada com os princípios **SOLID** e **Injeção de Dependências (DI)** iniciada na raiz de composição em [`cmd/server/main.go`](cmd/server/main.go). O sistema elimina estado global compartilhado e pacotes com inicializações ocultas.
+Noxfort Monitor adheres to a strict **Event-Driven Architecture (EDA)** combined with **SOLID** principles and **Dependency Injection (DI)** assembled at the composition root in [`cmd/server/main.go`](cmd/server/main.go). The system eliminates shared global mutable state and packages with hidden initialization routines.
 
-### As Camadas do Sistema:
-1. **Camada de Transporte (`internal/transport`)**: Terminação de protocolos de rede (Broker MQTT via Paho e Servidor HTTP REST com AuthMiddleware).
-2. **Camada de Lógica do Monitor (`internal/monitor`)**: O "cérebro" reativo (State Manager, Watchdog Engine, Alert Service e Channel Tester).
-3. **Camada de Segurança (`internal/security`)**: Gerenciamento de sessões, hash criptográfico de senhas, validação de tokens e controle de papéis (RBAC).
-4. **Camada de Acesso Remoto (`internal/tunnel`)**: Túnel reverso seguro via Ngrok para ingestão de nós externos عبر WAN.
-5. **Camada de Domínio (`internal/domain`)**: Estruturas de dados universais e contratos de interfaces desacopladas.
-6. **Camada de Persistência (`internal/storage`)**: Gerenciador dinâmico dual-engine ([`DBManager`](docs/DATABASE.md)), implementações PostgreSQL e SQLite, adaptador de dialetos e migrador de dados.
-7. **Camada de Interface Desktop (`internal/desktop`, `internal/tray`)**: Runtime nativo em Wails v2 com WebKitGTK e controle de instância única.
+### System Layers:
+1. **Transport Layer (`internal/transport`)**: Network protocol termination (MQTT Broker via Paho and HTTP REST Server with AuthMiddleware).
+2. **Monitor Logic Layer (`internal/monitor`)**: The reactive "brain" (State Manager, Watchdog Engine, Alert Service, and Channel Tester).
+3. **Security Layer (`internal/security`)**: Session management, cryptographic password hashing, token validation, and Role-Based Access Control (RBAC).
+4. **Remote Access Layer (`internal/tunnel`)**: Secure reverse tunneling via Ngrok for WAN-based edge node ingestion.
+5. **Domain Layer (`internal/domain`)**: Universal data structures and decoupled interface contracts.
+6. **Persistence Layer (`internal/storage`)**: Dynamic dual-engine manager ([`DBManager`](docs/DATABASE.md)), PostgreSQL and SQLite implementations, dialect adapter, and data migrator.
+7. **Desktop Interface Layer (`internal/desktop`, `internal/tray`)**: Native runtime in Wails v2 with WebKitGTK and single-instance enforcement.
 
 ```mermaid
 graph TD
-    subgraph "Mundo Externo & Nós de Borda"
-        LocalDevice[Dispositivo Local / LAN]
-        RemoteDevice[Agente Remoto / WAN (Carina, Synapse)]
-        Operator[Navegador / Operador Humano]
+    subgraph "External World & Edge Nodes"
+        LocalDevice[Local Device / LAN]
+        RemoteDevice[Remote Agent / WAN (Carina, Synapse)]
+        Operator[Browser / Human Operator]
     end
 
-    subgraph "Camada de Transporte & Rede"
-        MQTT[Broker MQTT :1883]
-        Ngrok[Túnel Ngrok / WAN HTTPS]
-        HTTP[Servidor HTTP :8080]
+    subgraph "Transport & Network Layer"
+        MQTT[MQTT Broker :1883]
+        Ngrok[Ngrok Tunnel / WAN HTTPS]
+        HTTP[HTTP Server :8080]
         AuthMW[AuthMiddleware - RBAC]
     end
 
-    subgraph "Camada de Lógica & Segurança"
+    subgraph "Logic & Security Layer"
         StateManager[State Manager]
         Watchdog[Watchdog Engine]
         Alerts[Alert Routing Service]
@@ -44,16 +44,16 @@ graph TD
         TunnelMgr[Tunnel Manager]
     end
 
-    subgraph "Persistência Dual-Engine (internal/storage)"
-        DBMgr[DBManager Central]
+    subgraph "Dual-Engine Persistence (internal/storage)"
+        DBMgr[Central DBManager]
         AuditRepo[AuditRepository]
-        PG[(PostgreSQL Industrial)]
-        SQLite[(SQLite Pure-Go)]
+        PG[(Industrial PostgreSQL)]
+        SQLite[(Pure-Go SQLite)]
     end
 
-    subgraph "Canais de Notificação Externa"
+    subgraph "External Notification Channels"
         Telegram[Telegram Bot API (MarkdownV2)]
-        Email[Servidor SMTP (Email)]
+        Email[SMTP Server (Email)]
     end
 
     LocalDevice -- "MQTT Publish" --> MQTT
@@ -61,120 +61,120 @@ graph TD
     Ngrok --> HTTP
     Operator -- "HTTP GET / POST" --> HTTP
 
-    MQTT -- "Decodifica Payload" --> StateManager
+    MQTT -- "Decodes Payload" --> StateManager
     HTTP --> AuthMW
     AuthMW --> StateManager
     AuthMW --> SecManager
 
-    StateManager -- "1. Persiste Incidente" --> DBMgr
-    StateManager -- "2. Dispara Alerta" --> Alerts
-    Watchdog -- "Verifica Heartbeats" --> DBMgr
-    Watchdog -- "Sintetiza Queda/Recuperação" --> Alerts
-    Watchdog -- "Registra Transição" --> AuditRepo
+    StateManager -- "1. Persists Incident" --> DBMgr
+    StateManager -- "2. Dispatches Alert" --> Alerts
+    Watchdog -- "Checks Heartbeats" --> DBMgr
+    Watchdog -- "Synthesizes Outage/Recovery" --> Alerts
+    Watchdog -- "Records Transition" --> AuditRepo
 
-    Alerts -- "Goroutine Concorrente" --> Telegram
-    Alerts -- "Goroutine Concorrente" --> Email
-    Alerts -- "Registra SLA de Envio" --> AuditRepo
+    Alerts -- "Concurrent Goroutine" --> Telegram
+    Alerts -- "Concurrent Goroutine" --> Email
+    Alerts -- "Records Dispatch SLA" --> AuditRepo
 
-    SecManager -- "Audita Logins" --> AuditRepo
+    SecManager -- "Audits Logins" --> AuditRepo
     DBMgr --> PG
     DBMgr --> SQLite
 ```
 
 ---
 
-## 2. Subsistemas Centrais em Detalhes
+## 2. Core Subsystems in Detail
 
-### 2.1 O Gerenciador de Estados (`internal/monitor/state.go`)
-O `StateManager` é o ponto focal de roteamento de eventos. Ele recebe cargas úteis decodificadas da camada de transporte (MQTT ou HTTP REST) e aplica o fluxo "Filtrar e Agir":
-* **Filtro de Heartbeat**: Toda mensagem recebida atualiza imediatamente o campo `last_seen` do dispositivo de origem através de `UpdateLastSeen`. O detector [`KeywordHeartbeatDetector`](internal/monitor/state.go) avalia a mensagem: se for de nível `INFO` e contiver palavras-chave de keep-alive ("*system ok*", "*heartbeat*", "*online*"), o processamento é finalizado ali, evitando consumo inútil de armazenamento e fadiga de alertas.
-* **Processamento de Incidentes**: Se a mensagem for um incidente real, o `StateManager` persiste o evento no repositório de telemetria e o encaminha para o `AlertService`.
+### 2.1 The State Manager (`internal/monitor/state.go`)
+The `StateManager` is the central event routing hub. It receives decoded payloads from the transport layer (MQTT or HTTP REST) and applies a "Filter and Act" pipeline:
+* **Heartbeat Filtering**: Every incoming message immediately updates the originating device's `last_seen` timestamp via `UpdateLastSeen`. The [`KeywordHeartbeatDetector`](internal/monitor/state.go) evaluates the message: if it is at the `INFO` level and contains keep-alive keywords ("*system ok*", "*heartbeat*", "*online*"), processing completes immediately, preventing redundant database writes and alert fatigue.
+* **Incident Processing**: If the message represents a genuine operational incident, the `StateManager` persists the event to the telemetry repository and forwards it to the `AlertService`.
 
-### 2.2 O Motor Watchdog (`internal/monitor/engine.go`)
-Enquanto o State Manager lida com eventos ativos, o `Engine` é responsável por detectar **falhas silenciosas**:
-* **Concorrência**: Executa em uma goroutine dedicada, acionada por um `time.Ticker` com intervalo padrão de 30 segundos.
-* **Avaliação de Presença**: Compara a hora atual com o `LastSeen` de cada equipamento. Se um sistema habilitado ficar sem reportar por mais de **5 minutos**, a estrutura [`SystemStatusTracker`](internal/monitor/tracker.go) detecta a transição e sintetiza um incidente `CRITICAL` `System OFFLINE`.
-* **Detecção de Recuperação**: Quando um sistema que estava offline volta a enviar sinais, o Engine sintetiza um evento `INFO` de recuperação e registra a duração total do tempo de inatividade (*downtime*) no repositório de auditoria.
+### 2.2 The Watchdog Engine (`internal/monitor/engine.go`)
+While the State Manager processes active incoming events, the `Engine` is responsible for detecting **silent failures**:
+* **Concurrency**: Runs in a dedicated goroutine driven by a `time.Ticker` with a default 30-second interval.
+* **Presence Evaluation**: Compares the current timestamp against the `LastSeen` timestamp of each monitored device. If an enabled device fails to report for more than **5 minutes**, the [`SystemStatusTracker`](internal/monitor/tracker.go) flags the transition and synthesizes a `CRITICAL` `System OFFLINE` incident.
+* **Recovery Detection**: When a previously offline device resumes transmitting, the Engine synthesizes an `INFO` recovery event and records the total downtime duration in the audit repository.
 
-### 2.3 Roteamento Inteligente de Alertas (`internal/monitor/alerts.go`)
-O `AlertService` desacopla a regra de notificação do envio físico através da interface [`NotificationChannel`](internal/monitor/channel.go):
-* **Categorização por Papel (RBAC)**:
-  * **Administradores**: Recebem todos os incidentes globais.
-  * **Técnicos**: Recebem apenas alertas da categoria `HARDWARE`.
-  * **Programadores**: Recebem apenas alertas da categoria `SOFTWARE`.
-* **Filtro de Severidade**: Contatos podem configurar seus perfis para receber exclusivamente alertas `CRITICAL`, suprimindo avisos `WARNING`.
-* **Despacho Assíncrono**: Cada notificação para cada contato é enviada em sua própria goroutine, garantindo que servidores SMTP lentos não causem atrasos no broker MQTT ou na API do Telegram.
-* **Auditoria de Entrega**: Toda tentativa gera um registro [`AlertDispatchLog`](docs/AUDIT_TRAIL.md) com status `SENT` ou `FAILED` e motivo da recusa.
+### 2.3 Intelligent Alert Routing (`internal/monitor/alerts.go`)
+The `AlertService` decouples notification business logic from physical transmission through the [`NotificationChannel`](internal/monitor/channel.go) interface:
+* **Role-Based Categorization (RBAC)**:
+  * **Administrators**: Receive all global incidents.
+  * **Technicians**: Receive only alerts in the `HARDWARE` category.
+  * **Programmers**: Receive only alerts in the `SOFTWARE` category.
+* **Severity Filtering**: Contacts can configure their profiles to exclusively receive `CRITICAL` alerts, suppressing `WARNING` notifications.
+* **Asynchronous Dispatch**: Each notification to each recipient is dispatched in its own goroutine, ensuring that slow SMTP servers never block the MQTT broker or the Telegram API.
+* **Delivery Auditing**: Every transmission attempt generates an [`AlertDispatchLog`](docs/AUDIT_TRAIL.md) entry with status `SENT` or `FAILED` along with the failure reason if applicable.
 
-### 2.4 Subsistema de Segurança & Sessões (`internal/security`)
-* **Gerenciamento de Identidade**: [`SecurityManager`](internal/security/security_manager.go) centraliza autenticação, RBAC e auditoria.
-* **Tokens Criptográficos**: O [`SessionManager`](internal/security/session.go) emite tokens seguros em memória com renovação e expiração.
-* **Isolamento de Senhas**: Hashes de senha contêm salt exclusivo e são omitidos em qualquer serialização JSON.
+### 2.4 Security & Session Subsystem (`internal/security`)
+* **Identity Management**: [`SecurityManager`](internal/security/security_manager.go) centralizes authentication, RBAC, and security auditing.
+* **Cryptographic Tokens**: The [`SessionManager`](internal/security/session.go) issues secure in-memory tokens with sliding renewal and expiration.
+* **Password Isolation**: Passwords are hashed with unique cryptographic salts and excluded from JSON serialization.
 
-### 2.5 Acesso Remoto & Ingestão WAN (`internal/tunnel`)
-* O pacote [`internal/tunnel`](docs/REMOTE_ACCESS.md) encapsula o driver Ngrok, iniciando túneis com domínios estáticos e mantendo o status em memória para distribuição aos clientes de campo.
-
----
-
-## 3. Modelo de Domínio e Entidades Centrais (`internal/domain`)
-
-O pacote `internal/domain` não possui nenhuma dependência externa, constituindo o núcleo puro da aplicação:
-
-* **`IncomingEvent`**: A estrutura universal de telemetria contendo `Category`, `Origin`, `Level`, `Message` e `OccurredAt`.
-* **`Device`**: Representa um nó monitorado, com seu nome amigável, identificador e carimbo de data/hora `LastSeen`.
-* **`Contact`**: Destinatários de incidentes com seus papéis, canais (Email, Telegram Chat ID) e filtros de severidade.
-* **`User`**: Operadores do sistema com suas credenciais e papéis (`RoleAdmin`, `RoleOperator`).
-* **`SecurityAuditLog`**, **`AlertDispatchLog`**, **`DeviceStateTransition`**: Modelos de auditoria e conformidade.
-* **`DatabaseConfig`** e **`DatabaseStatus`**: Parâmetros e estado de saúde da camada de dados.
+### 2.5 Remote Access & WAN Ingestion (`internal/tunnel`)
+* The [`internal/tunnel`](docs/REMOTE_ACCESS.md) package wraps the Ngrok driver, managing secure tunnels with static domains and exposing tunnel status in memory for edge clients.
 
 ---
 
-## 4. Camada de Persistência & Dual-Engine (`internal/storage`)
+## 3. Domain Model and Core Entities (`internal/domain`)
 
-Consulte o guia dedicado [Banco de Dados & Persistência](docs/DATABASE.md).
+The `internal/domain` package has zero external dependencies, serving as the pure core of the application:
 
-* **Dual-Engine Nativo**:
-  * **SQLite**: `modernc.org/sqlite` para modo embarcado sem compilador C (CGO-free).
-  * **PostgreSQL**: `github.com/lib/pq` para servidores industriais com isolamento de schema (`schema_monitor`).
-* **DBManager Central**: Permite alternância a quente de banco via `ReloadableRepository.SetDB()` sem reiniciar o processo.
-* **Migrador Automático**: Sincronização estruturada de dados entre drivers via `MigrateData()`.
-* **Query Adapter**: Adaptação em tempo de execução de placeholders `?` para `$1, $2` e resolução de cláusulas de conflito.
+* **`IncomingEvent`**: Universal telemetry payload containing `Category`, `Origin`, `Level`, `Message`, and `OccurredAt`.
+* **`Device`**: Monitored node with its human-readable name, unique identifier, and `LastSeen` timestamp.
+* **`Contact`**: Incident recipients with roles, notification channels (Email, Telegram Chat ID), and severity filters.
+* **`User`**: System operators with credentials and assigned roles (`RoleAdmin`, `RoleOperator`).
+* **`SecurityAuditLog`**, **`AlertDispatchLog`**, **`DeviceStateTransition`**: Compliance and audit trail models.
+* **`DatabaseConfig`** and **`DatabaseStatus`**: Parameters and health state of the persistence layer.
 
 ---
 
-## 5. Modelo de Threads, Concorrência & Sistema Operacional
+## 4. Persistence Layer & Dual-Engine (`internal/storage`)
+
+See the dedicated guide [Database & Persistence](docs/DATABASE.md).
+
+* **Native Dual-Engine**:
+  * **SQLite**: `modernc.org/sqlite` for embedded deployments without a C compiler (CGO-free).
+  * **PostgreSQL**: `github.com/lib/pq` for industrial servers with schema isolation (`schema_monitor`).
+* **Central DBManager**: Enables hot database switching via `ReloadableRepository.SetDB()` without restarting the process.
+* **Automatic Migrator**: Structured data synchronization across engines via `MigrateData()`.
+* **Query Adapter**: Runtime adaptation of SQL placeholders (`?` to `$1, $2`) and conflict clause resolution.
+
+---
+
+## 5. Threading Model, Concurrency & Operating System
 
 ```mermaid
 graph TD
-    Main[Main OS Thread / Goroutine Principal]
+    Main[Main OS Thread / Primary Goroutine]
     
-    Main -->|Modo GUI Padrão| WailsEventLoop[Wails v2 Desktop Event Loop]
+    Main -->|Standard GUI Mode| WailsEventLoop[Wails v2 Desktop Event Loop]
     WailsEventLoop --> Systray[Systray GTK Callbacks]
-    WailsEventLoop --> WebKit[Janela WebKitGTK]
+    WailsEventLoop --> WebKit[WebKitGTK Window]
     
-    Main -->|Modo --headless| SigChan[Signal Notify Loop (SIGINT/SIGTERM)]
+    Main -->|--headless Mode| SigChan[Signal Notify Loop (SIGINT/SIGTERM)]
 
-    Main -.->|go func| HTTPServer[Servidor HTTP ListenAndServe]
+    Main -.->|go func| HTTPServer[HTTP Server ListenAndServe]
     Main -.->|go func| MQTTListener[Paho MQTT Packet Loop]
     Main -.->|go func| WatchdogEngine[Ticker Loop - 30s Interval]
-    Main -.->|go func| AlertWorkers[Workers Concorrentes de Email/Telegram]
+    Main -.->|go func| AlertWorkers[Concurrent Email/Telegram Workers]
 ```
 
-* **Goroutine Principal**: 
-  * Em modo desktop, executa `desktopApp.Run()` (Wails v2), obrigatório pois os toolkits gráficos do Linux (GTK/WebKit) exigem execução na thread principal do sistema operacional.
-  * Em modo `--headless`, bloqueia em um canal de sinais do sistema operacional (`syscall.SIGTERM`, `os.Interrupt`).
-* **Servidor Web**: Opera em goroutine independente com timeouts de leitura/escrita de 15 segundos.
-* **Listener MQTT**: O cliente Paho gerencia o socket TCP em goroutines dedicadas de leitura/escrita.
-* **Loop do Engine**: Opera em canal `time.Ticker` desacoplado.
-* **Encerramento Gracioso (Graceful Shutdown)**: Coordenado por uma função segura com `sync.Once` que fecha o socket IPC, para o túnel Ngrok, encerra o servidor HTTP, para o Engine, desconecta do broker MQTT e libera o banco de dados.
+* **Primary Goroutine**: 
+  * In desktop mode, executes `desktopApp.Run()` (Wails v2), required because Linux graphical toolkits (GTK/WebKit) must run on the primary OS thread.
+  * In `--headless` mode, blocks on an OS signal notification channel (`syscall.SIGTERM`, `os.Interrupt`).
+* **Web Server**: Runs in an independent goroutine with 15-second read/write timeouts.
+* **MQTT Listener**: The Paho client manages the TCP socket across dedicated read/write goroutines.
+* **Watchdog Loop**: Operates on a decoupled `time.Ticker` channel.
+* **Graceful Shutdown**: Coordinated by a thread-safe `sync.Once` routine that closes the IPC socket, stops the Ngrok tunnel, shuts down the HTTP server, stops the Watchdog Engine, disconnects from the MQTT broker, and releases database connections.
 
 ---
 
-### 🔗 Documentos Relacionados
-* 🧭 [Central de Documentação](docs/INDEX.md) — Índice geral do repositório
-* 🗄️ [Banco de Dados & Persistência](docs/DATABASE.md) — DBManager, PostgreSQL e SQLite
-* 🔐 [Segurança e RBAC](docs/SECURITY.md) — Detalhes do SecurityManager e Middleware
-* 🌐 [Acesso Remoto](docs/REMOTE_ACCESS.md) — Arquitetura do túnel Ngrok
-* 🖥️ [Aplicação Desktop](docs/DESKTOP_APP.md) — Runtime Wails v2 e modo Headless
-* 🔍 [Trilha de Auditoria](docs/AUDIT_TRAIL.md) — Modelo de conformidade
-* 📡 [Referência de APIs](docs/API_REFERENCE.md) — Contratos REST e MQTT
+### 🔗 Related Documentation
+* 🧭 [Documentation Hub](docs/INDEX.md) — Master documentation index
+* 🗄️ [Database & Persistence](docs/DATABASE.md) — DBManager, PostgreSQL, and SQLite
+* 🔐 [Security & RBAC](docs/SECURITY.md) — SecurityManager and Middleware details
+* 🌐 [Remote Access](docs/REMOTE_ACCESS.md) — Ngrok reverse tunnel architecture
+* 🖥️ [Desktop Application](docs/DESKTOP_APP.md) — Wails v2 runtime and Headless mode
+* 🔍 [Audit Trail](docs/AUDIT_TRAIL.md) — Compliance and audit tracking model
+* 📡 [API Reference](docs/API_REFERENCE.md) — REST and MQTT contracts
